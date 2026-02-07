@@ -1,0 +1,120 @@
+================================================================================
+PROMPT: Mulher com Vestido Bege (Estilo @ricco.ia)
+================================================================================
+
+Ultra-realistic, hyper-realistic cinematic photograph.
+Shot on RED Komodo 6K S35 DSMC3, Super35 CMOS sensor (19.9MP, global shutter), native 6144×3240, upscaled to 8K UHD (7680×4320), 16+ stops dynamic range, REDCODE RAW R3D, Apple ProRes 422 HQ.
+
+Lens: Canon RF 24-70mm f/2.8L IS USM, focal ~50mm, aperture f/4, ISO 800 native, shutter 1/200s.
+
+Subject:
+Young adult woman (clearly over 18), very fair/light skin with warm undertones, realistic skin texture with visible pores and subtle imperfections. Natural curves with pronounced hips and thighs, realistic anatomy and weight distribution.
+
+Wardrobe:
+Fitted beige/nude bodycon dress, smooth fabric following the body naturally, realistic fabric tension and folds.
+
+Lighting:
+Warm indoor lighting with soft tungsten tones, gentle highlights on skin and fabric, smooth falloff shadows, balanced exposure. No harsh light, no blown highlights.
+
+Environment:
+Minimal indoor setting with warm neutral walls and wooden floor, shallow depth of field, background softly out of focus but realistic.
+
+Face & hair:
+Long blonde hair with soft waves, individual strands visible, natural volume. Subtle makeup, soft blush, defined lips, realistic eye reflections with natural catchlights.
+
+Quality & realism:
+Extreme photorealism, no AI artifacts, no plastic or wax skin, no over-smoothing. Perfect anatomy, accurate proportions, cinematic color grading, looks indistinguishable from a real professional 8K photograph.
+
+================================================================================
+PROMPT: Mulher com Bodiesuit Preto
+================================================================================
+
+Ultra-realistic, hyper-realistic cinematic photograph.
+Shot on RED Komodo 6K S35 DSMC3, Super35 CMOS sensor, global shutter, upscaled to 8K UHD (7680×4320), 16+ stops dynamic range, REDCODE RAW R3D, ProRes 422 HQ.
+
+Lens: Canon RF 24-70mm f/2.8L, ~35mm, f/4, ISO 800, shutter 1/200s.
+
+Scene:
+Young adult woman (clearly over 18), very fair light skin with natural pink undertones, real skin texture with visible pores and subtle imperfections. Natural body proportions, thick thighs, soft curves, realistic weight distribution.
+
+Wearing a black long-sleeve bodysuit, standing indoors in a modern apartment living room. Relaxed, confident posture, hips slightly angled, one arm near the hip.
+
+Camera & framing:
+Medium-low angle, camera slightly below chest level, close perspective, vertical 9:16, subject centered, natural lens distortion.
+
+Lighting:
+Cool bluish ambient lighting, soft LED tones creating subtle blue/violet reflections on skin and fabric. Balanced shadows, no harsh highlights.
+
+Details:
+Long straight dark brown hair with visible individual strands, natural makeup, soft lips, realistic eye reflections. Background slightly out of focus with visible interior elements (AC unit, neutral walls, dark floor).
+
+Extreme realism, perfect anatomy, no AI artifacts, no plastic skin, cinematic color grading, indistinguishable from a real 8K photograph.
+
+================================================================================
+PROMPT: Mulher Loira com Short (Estilo do vídeo 1)
+================================================================================
+
+Ultra-realistic, hyper-realistic cinematic photograph.
+Shot on RED Komodo 6K S35 DSMC3, Super35 CMOS sensor, global shutter, upscaled to 8K UHD (7680×4320), 16+ stops dynamic range, REDCODE RAW R3D, ProRes 422 HQ.
+
+Lens: Canon RF 24-70mm f/2.8L, ~35mm, f/4, ISO 800, shutter 1/200s.
+
+Scene:
+Young adult blonde woman (clearly over 18), very fair light skin with warm undertones, real skin texture with visible pores and subtle imperfections. Natural body proportions, fit body, realistic weight distribution.
+
+Wearing a white cropped t-shirt with Corinthians football team logo and light blue denim shorts, standing outdoors in a covered patio area. Dancing pose, energetic movement, confident expression.
+
+Camera & framing:
+Medium angle, camera at chest level, vertical 9:16, subject centered, natural lens distortion.
+
+Lighting:
+Natural daylight, soft shadows, warm tones, balanced exposure. No harsh light, no blown highlights.
+
+Details:
+Long blonde wavy hair with visible individual strands, natural makeup, soft blush, defined lips, realistic eye reflections. Background showing outdoor patio with plants and tiled floor.
+
+Extreme realism, perfect anatomy, no AI artifacts, no plastic skin, cinematic color grading, indistinguishable from a real 8K photograph.
+
+================================================================================
+DICAS PARA CRIAR SEUS PRÓPRIOS PROMPTS:
+================================================================================
+
+1. ESPECIFICAÇÃO DE CÂMERA:
+   - Mencione câmera profissional (RED Komodo, ARRI Alexa, Sony Venice)
+   - Inclua especificações técnicas (sensor, resolução, codec)
+   - Detalhes da lente (Canon RF, Sony G Master, etc.)
+
+2. CONFIGURAÇÕES TÉCNICAS:
+   - ISO nativo
+   - Abertura (f/2.8, f/4, etc.)
+   - Velocidade do obturador
+   - Distância focal
+
+3. DESCRIÇÃO DO SUJEITO:
+   - Idade aparente (+18)
+   - Tipo de pele (tom, textura, poros visíveis)
+   - Proporções naturais
+   - Curvas realistas
+
+4. VESTUÁRIO:
+   - Descrição detalhada da roupa
+   - Cor e material
+   - Como o tecido se comporta no corpo
+
+5. ILUMINAÇÃO:
+   - Tipo (natural, tungstênio, LED)
+   - Temperatura de cor (quente, fria)
+   - Sombras e highlights
+
+6. AMBIENTE:
+   - Localização
+   - Profundidade de campo
+   - Elementos de fundo
+
+7. QUALIDADE:
+   - "Extreme photorealism"
+   - "No AI artifacts"
+   - "No plastic skin"
+   - "Cinematic color grading"
+
+================================================================================

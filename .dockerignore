@@ -1,0 +1,72 @@
+# ============================================================================
+# .dockerignore — KlingAI Studio
+# ============================================================================
+
+# Dependências (serão reinstaladas no container)
+node_modules/
+server/node_modules/
+
+# Builds locais (serão recriados no container)
+dist/
+server/dist/
+
+# Arquivos de dados (serão montados como volume)
+data/
+temp_uploads/
+logs/
+
+# Logs de deployment
+logs_error_400/
+logs_extracted/
+logs_temp/
+
+# Staging e deployment packages
+deployment/
+deployment_staging/
+temp_verify/
+
+# Git
+.git/
+.gitignore
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Arquivos de ambiente (secrets devem vir via env vars)
+.env
+.env.*
+server/.env
+server/.env.*
+
+# Arquivos de teste
+test-*.ts
+server/test-*.ts
+server/src/test-*.ts
+
+# Docs (não necessários em runtime)
+docs/
+ImagemPrompt/
+Prompts_exemplos.txt
+DEPLOYMENT.md
+README.md
+
+# Uploads temporários
+temp_uploads/*
+server/temp_uploads/*
+
+# Thumbnails geradas
+*.thumb.*
+
+# Build logs
+acr_build.log
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Docker build context (extra safety)
+docker_build_staging/
