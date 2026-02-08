@@ -13,7 +13,10 @@ import {
   ExternalLink,
   Wifi,
   WifiOff,
+  LogIn,
+  ArrowRight,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useInstagramPublish, type PublishDestination } from '@/hooks/useInstagramPublish';
 import { useToast } from '@/contexts/ToastContext';
@@ -67,33 +70,70 @@ export function InstagramPublishModal({
   defaultCaption = '',
   thumbnailUrl,
 }: InstagramPublishModalProps) {
-  const { publish, checkBotStatus, isPublishing, lastResult, reset } = useInstagramPublish();
+  const { publish, checkBotStatus, triggerLogin, isPublishing, lastResult, needsLogin, reset } = useInstagramPublish();
   const { addToast } = useToast();
+  const navigate = useNavigate();
 
   const [destination, setDestination] = useState<PublishDestination>('feed');
   const [caption, setCaption] = useState(defaultCaption);
   const [botConnected, setBotConnected] = useState<boolean | null>(null);
   const [botUsername, setBotUsername] = useState<string>('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [step, setStep] = useState<'config' | 'publishing' | 'result'>('config');
 
-  // Verificar status do bot ao abrir
+  // Verificar status do bot ao abrir — e auto-login se desconectado
   useEffect(() => {
-    if (isOpen) {
-      reset();
-      setStep('config');
-      setCaption(defaultCaption);
-      checkBotStatus().then(status => {
-        setBotConnected(status?.isLoggedIn ?? false);
-        setBotUsername(status?.username || '');
-      });
-    }
-  }, [isOpen, defaultCaption, checkBotStatus, reset]);
+    if (!isOpen) return;
+
+    reset();
+    setStep('config');
+    setCaption(defaultCaption);
+    setBotConnected(null);
+    setIsLoggingIn(false);
+
+    (async () => {
+      const status = await checkBotStatus();
+      if (status?.isLoggedIn) {
+        setBotConnected(true);
+        setBotUsername(status.username || '');
+      } else {
+        // Tentar auto-login automaticamente
+        console.log('[PublishModal] Bot desconectado, tentando auto-login...');
+        setIsLoggingIn(true);
+        const loginResult = await triggerLogin();
+        setIsLoggingIn(false);
+
+        if (loginResult?.isLoggedIn) {
+          setBotConnected(true);
+          setBotUsername(loginResult.username || '');
+          addToast({ type: 'success', title: 'Instagram conectado!', message: `Logado como @${loginResult.username}` });
+        } else {
+          setBotConnected(false);
+        }
+      }
+    })();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtrar destinos disponíveis
   const availableDestinations = destinations.filter(d => {
     if (d.videoOnly && mediaType === 'image') return false;
     return true;
   });
+
+  // Tentar reconectar manualmente
+  const handleRetryLogin = useCallback(async () => {
+    setIsLoggingIn(true);
+    const loginResult = await triggerLogin();
+    setIsLoggingIn(false);
+
+    if (loginResult?.isLoggedIn) {
+      setBotConnected(true);
+      setBotUsername(loginResult.username || '');
+      addToast({ type: 'success', title: 'Conectado!', message: `Logado como @${loginResult.username}` });
+    } else {
+      addToast({ type: 'error', title: 'Falha no login', message: 'Verifique sua conta no Social Hub' });
+    }
+  }, [triggerLogin, addToast]);
 
   const handlePublish = useCallback(async () => {
     setStep('publishing');
@@ -113,14 +153,13 @@ export function InstagramPublishModal({
         title: 'Publicado no Instagram!',
         message: `${destination === 'feed' ? 'Post' : destination === 'story' ? 'Story' : 'Reel'} publicado com sucesso`,
       });
-    } else {
-      addToast({
-        type: 'error',
-        title: 'Erro na publicação',
-        message: result.error || 'Falha ao publicar no Instagram',
-      });
     }
   }, [publish, mediaUrl, caption, destination, mediaType, addToast]);
+
+  const handleGoToSocialHub = () => {
+    onClose();
+    navigate('/social');
+  };
 
   const handleClose = () => {
     if (!isPublishing) {
@@ -171,22 +210,59 @@ export function InstagramPublishModal({
 
           {/* Content */}
           <div className="p-4 space-y-4">
-            {/* Bot Status */}
-            {botConnected === false && (
-              <div className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
-                <WifiOff className="w-5 h-5 text-red-400 flex-shrink-0" />
-                <div>
-                  <p className="text-red-400 text-sm font-medium">Bot desconectado</p>
-                  <p className="text-red-400/70 text-xs">Faça login no Instagram Bot primeiro</p>
+
+            {/* ── Loading / Auto-login ── */}
+            {(botConnected === null || isLoggingIn) && (
+              <div className="py-10 text-center space-y-3">
+                <Loader2 className="w-8 h-8 text-[#7e57c2] animate-spin mx-auto" />
+                <p className="text-[#b0b0b0] text-sm">
+                  {isLoggingIn ? 'Conectando ao Instagram...' : 'Verificando conexão...'}
+                </p>
+                <p className="text-[#666] text-xs">
+                  {isLoggingIn && 'Login automático via conta salva'}
+                </p>
+              </div>
+            )}
+
+            {/* ── Bot desconectado — sem conta ── */}
+            {botConnected === false && !isLoggingIn && (
+              <div className="py-8 space-y-4">
+                <div className="flex flex-col items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <WifiOff className="w-10 h-10 text-red-400" />
+                  <div className="text-center">
+                    <p className="text-red-400 font-medium">Conta Instagram não conectada</p>
+                    <p className="text-red-400/70 text-xs mt-1">
+                      Conecte sua conta Instagram no Social Hub para publicar
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleRetryLogin}
+                    variant="outline"
+                    className="flex-1 border-[#444444] text-white hover:bg-[#444444]"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Tentar reconectar
+                  </Button>
+                  <Button
+                    onClick={handleGoToSocialHub}
+                    className="flex-1 bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+                  >
+                    Ir ao Social Hub
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
                 </div>
               </div>
             )}
 
-            {botConnected === true && step === 'config' && (
+            {/* ── Configuração de publicação ── */}
+            {botConnected === true && !isLoggingIn && step === 'config' && (
               <>
                 <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/30 rounded-lg">
                   <Wifi className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400 text-xs">Bot conectado como @{botUsername}</span>
+                  <span className="text-green-400 text-xs">Conectado como @{botUsername}</span>
                 </div>
 
                 {/* Media Preview */}
@@ -264,7 +340,7 @@ export function InstagramPublishModal({
                 {/* Publish Button */}
                 <Button
                   onClick={handlePublish}
-                  disabled={!botConnected || isPublishing}
+                  disabled={isPublishing}
                   className="w-full bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90 text-white font-medium h-11"
                 >
                   <Send className="w-4 h-4 mr-2" />
@@ -273,7 +349,7 @@ export function InstagramPublishModal({
               </>
             )}
 
-            {/* Publishing State */}
+            {/* ── Publishing State ── */}
             {step === 'publishing' && (
               <div className="py-10 text-center space-y-4">
                 <motion.div
@@ -288,11 +364,12 @@ export function InstagramPublishModal({
                   <p className="text-[#b0b0b0] text-sm mt-1">
                     Enviando {mediaType === 'video' ? 'vídeo' : 'imagem'} para o Instagram
                   </p>
+                  <p className="text-[#666] text-xs mt-2">Isso pode levar alguns segundos</p>
                 </div>
               </div>
             )}
 
-            {/* Result State */}
+            {/* ── Result State ── */}
             {step === 'result' && lastResult && (
               <div className="py-8 text-center space-y-4">
                 {lastResult.success ? (
@@ -336,13 +413,35 @@ export function InstagramPublishModal({
                       <h3 className="text-white font-medium">Erro na publicação</h3>
                       <p className="text-red-400 text-sm mt-1">{lastResult.error}</p>
                     </div>
-                    <Button
-                      onClick={() => setStep('config')}
-                      variant="outline"
-                      className="border-[#444444] text-white hover:bg-[#444444]"
-                    >
-                      Tentar novamente
-                    </Button>
+
+                    {lastResult.needsLogin ? (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleRetryLogin}
+                          disabled={isLoggingIn}
+                          variant="outline"
+                          className="flex-1 border-[#444444] text-white hover:bg-[#444444]"
+                        >
+                          {isLoggingIn ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogIn className="w-4 h-4 mr-2" />}
+                          Reconectar
+                        </Button>
+                        <Button
+                          onClick={handleGoToSocialHub}
+                          className="flex-1 bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+                        >
+                          Social Hub
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => setStep('config')}
+                        variant="outline"
+                        className="border-[#444444] text-white hover:bg-[#444444]"
+                      >
+                        Tentar novamente
+                      </Button>
+                    )}
                   </>
                 )}
 
@@ -352,14 +451,6 @@ export function InstagramPublishModal({
                 >
                   Fechar
                 </Button>
-              </div>
-            )}
-
-            {/* Loading bot status */}
-            {botConnected === null && (
-              <div className="py-8 text-center space-y-3">
-                <Loader2 className="w-8 h-8 text-[#7e57c2] animate-spin mx-auto" />
-                <p className="text-[#b0b0b0] text-sm">Verificando conexão do bot...</p>
               </div>
             )}
           </div>

@@ -713,7 +713,24 @@ router.post('/publish', asyncHandler(async (req: Request, res: Response) => {
         return;
     }
 
+    const userId = (req as any).userId;
     const bot = getBot(req);
+
+    // Auto-login se não estiver logado
+    if (!bot.getStatus().isLoggedIn) {
+        try {
+            console.log('[Publish] Bot não logado, executando auto-login...');
+            await bot.autoLogin(userId);
+            console.log('[Publish] Auto-login OK');
+        } catch (loginErr: any) {
+            res.status(401).json({
+                success: false,
+                error: `Conta Instagram não conectada. Vá em Social Hub e conecte sua conta. (${loginErr.message})`,
+                needsLogin: true,
+            });
+            return;
+        }
+    }
 
     try {
         const result = await bot.publishFromUrl({
@@ -747,7 +764,23 @@ router.post('/publish/batch', asyncHandler(async (req: Request, res: Response) =
         return;
     }
 
+    const userId = (req as any).userId;
     const bot = getBot(req);
+
+    // Auto-login se não estiver logado
+    if (!bot.getStatus().isLoggedIn) {
+        try {
+            await bot.autoLogin(userId);
+        } catch (loginErr: any) {
+            res.status(401).json({
+                success: false,
+                error: `Conta Instagram não conectada. Vá em Social Hub e conecte sua conta. (${loginErr.message})`,
+                needsLogin: true,
+            });
+            return;
+        }
+    }
+
     const results: any[] = [];
 
     for (const item of items) {

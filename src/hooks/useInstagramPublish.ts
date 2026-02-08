@@ -17,6 +17,7 @@ export interface InstagramPublishResult {
   postUrl?: string;
   mediaId?: string;
   error?: string;
+  needsLogin?: boolean;
 }
 
 export interface BotStatus {
@@ -30,6 +31,7 @@ export function useInstagramPublish() {
   const { token } = useAuth();
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [lastResult, setLastResult] = useState<InstagramPublishResult | null>(null);
 
   const headers = useCallback(() => ({
@@ -53,10 +55,31 @@ export function useInstagramPublish() {
     }
   }, [headers]);
 
+  // Trigger manual login (auto-login via token salvo)
+  const triggerLogin = useCallback(async (): Promise<BotStatus | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/instagram-bot/login`, {
+        method: 'POST',
+        headers: headers(),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setNeedsLogin(false);
+        return await checkBotStatus();
+      }
+      setError(json.error || 'Falha no login');
+      return null;
+    } catch {
+      setError('Erro de rede ao fazer login');
+      return null;
+    }
+  }, [headers, checkBotStatus]);
+
   // Publicar mídia no Instagram via URL
   const publish = useCallback(async (options: InstagramPublishOptions): Promise<InstagramPublishResult> => {
     setIsPublishing(true);
     setError(null);
+    setNeedsLogin(false);
     setLastResult(null);
 
     try {
@@ -72,12 +95,16 @@ export function useInstagramPublish() {
         postUrl: json.postUrl,
         mediaId: json.mediaId,
         error: json.error,
+        needsLogin: json.needsLogin,
       };
 
       setLastResult(result);
 
       if (!json.success) {
         setError(json.error || 'Erro ao publicar no Instagram');
+        if (json.needsLogin) {
+          setNeedsLogin(true);
+        }
       }
 
       return result;
@@ -97,13 +124,16 @@ export function useInstagramPublish() {
     setError(null);
     setLastResult(null);
     setIsPublishing(false);
+    setNeedsLogin(false);
   }, []);
 
   return {
     publish,
     checkBotStatus,
+    triggerLogin,
     isPublishing,
     error,
+    needsLogin,
     lastResult,
     reset,
   };
