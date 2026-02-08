@@ -47,7 +47,11 @@ router.use(requireAuth);
 
 // ── Persistência de Proxy em disco ──────────────────────────────────────────
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Em produção no Azure App Service, /home é persistente
+// Em desenvolvimento, usa /app/data ou ./data
+const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
+    ? '/home/data'
+    : path.join(process.cwd(), 'data');
 const PROXY_CONFIG_FILE = path.join(DATA_DIR, 'proxy-config.json');
 
 interface ProxyConfig {
@@ -92,6 +96,7 @@ function applyProxyFromDisk(): void {
 
 // Aplicar ao iniciar
 applyProxyFromDisk();
+console.log(`[Settings] Proxy config path: ${PROXY_CONFIG_FILE}`);
 
 /**
  * POST /api/settings/proxy
