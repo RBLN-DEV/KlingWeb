@@ -220,15 +220,17 @@ export class InstagramWebAPI {
 
     // ── HTTP helpers ───────────────────────────────────────────────────────
 
-    private getFetchOptions(): RequestInit {
+    private getFetchOptions(timeoutMs = 30000): RequestInit {
         const opts: RequestInit = {};
         if (this.proxyAgent) {
             (opts as any).dispatcher = this.proxyAgent;
         }
+        // AbortController com timeout para evitar requests penduradas
+        opts.signal = AbortSignal.timeout(timeoutMs);
         return opts;
     }
 
-    private async apiGet(endpoint: string, params?: Record<string, string>, retries = 2): Promise<any> {
+    private async apiGet(endpoint: string, params?: Record<string, string>, retries = 2, timeoutMs = 15000): Promise<any> {
         const url = new URL(`${API_URL}/${endpoint}`);
         if (params) {
             Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -242,7 +244,7 @@ export class InstagramWebAPI {
                 const response = await fetch(url.toString(), {
                     method: 'GET',
                     headers: this.getAjaxHeaders(),
-                    ...this.getFetchOptions(),
+                    ...this.getFetchOptions(timeoutMs),
                 });
 
                 // Capturar cookies da resposta
@@ -250,7 +252,7 @@ export class InstagramWebAPI {
                 this.parseCookies(setCookies);
 
                 if (response.status === 429 && attempt < retries) {
-                    const wait = 30 * (attempt + 1);
+                    const wait = 15 * (attempt + 1);
                     console.warn(`[IG-Web] Rate limit (429). Aguardando ${wait}s... (tentativa ${attempt + 1}/${retries})`);
                     await new Promise(r => setTimeout(r, wait * 1000));
                     continue;
@@ -261,14 +263,19 @@ export class InstagramWebAPI {
                 }
 
                 return await response.json();
-            } catch (error) {
-                if (attempt === retries) throw error;
-                console.warn(`[IG-Web] API GET ${endpoint}: tentativa ${attempt + 1} falhou`, error);
+            } catch (error: any) {
+                const isTimeout = error?.name === 'TimeoutError' || error?.code === 'ABORT_ERR' || error?.message?.includes('timed out');
+                if (isTimeout) {
+                    console.warn(`[IG-Web] API GET ${endpoint}: timeout (${timeoutMs}ms) tentativa ${attempt + 1}/${retries + 1}`);
+                } else {
+                    console.warn(`[IG-Web] API GET ${endpoint}: tentativa ${attempt + 1} falhou`, error?.message || error);
+                }
+                if (attempt === retries) throw new Error(isTimeout ? `Timeout ao acessar ${endpoint} (${timeoutMs}ms)` : (error?.message || 'Erro desconhecido'));
             }
         }
     }
 
-    private async apiPost(endpoint: string, data?: Record<string, string>, retries = 2): Promise<any> {
+    private async apiPost(endpoint: string, data?: Record<string, string>, retries = 2, timeoutMs = 30000): Promise<any> {
         const url = `${API_URL}/${endpoint}`;
         this.refreshCsrf();
 
@@ -281,7 +288,7 @@ export class InstagramWebAPI {
                     method: 'POST',
                     headers: this.getAjaxHeaders(),
                     body,
-                    ...this.getFetchOptions(),
+                    ...this.getFetchOptions(timeoutMs),
                 });
 
                 const setCookies = response.headers.getSetCookie?.() || [];
@@ -306,27 +313,32 @@ export class InstagramWebAPI {
         }
     }
 
-    private async webPost(path: string, data?: Record<string, string>): Promise<any> {
+    private async webPost(path: string, data?: Record<string, string>, timeoutMs = 15000): Promise<any> {
         const url = `${BASE_URL}${path}`;
         this.refreshCsrf();
 
         const body = data ? new URLSearchParams(data).toString() : '';
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: this.getAjaxHeaders(),
-            body,
-            ...this.getFetchOptions(),
-        });
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: this.getAjaxHeaders(),
+                body,
+                ...this.getFetchOptions(timeoutMs),
+            });
 
-        const setCookies = response.headers.getSetCookie?.() || [];
-        this.parseCookies(setCookies);
+            const setCookies = response.headers.getSetCookie?.() || [];
+            this.parseCookies(setCookies);
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            const isTimeout = error?.name === 'TimeoutError' || error?.code === 'ABORT_ERR';
+            throw new Error(isTimeout ? `Timeout em POST ${path} (${timeoutMs}ms)` : (error?.message || 'Erro desconhecido'));
         }
-
-        return await response.json();
     }
 
     // ── Login / Sessão ─────────────────────────────────────────────────────
@@ -485,31 +497,68 @@ export class InstagramWebAPI {
     // ── Perfil / Usuário ───────────────────────────────────────────────────
 
     async getUserInfo(username: string): Promise<IGWebUser | null> {
+        // Tentativa 1: web_profile_info (API v1) — mais completa
         try {
             const data = await this.apiGet('users/web_profile_info/', {
                 username,
-            });
+            }, 1, 12000); // 1 retry, 12s timeout
 
             const userData = data?.data?.user;
-            if (!userData) return null;
-
-            return {
-                pk: parseInt(userData.id || '0', 10),
-                username: userData.username || '',
-                fullName: userData.full_name || '',
-                biography: userData.biography || '',
-                followerCount: userData.edge_followed_by?.count || 0,
-                followingCount: userData.edge_follow?.count || 0,
-                mediaCount: userData.edge_owner_to_timeline_media?.count || 0,
-                isPrivate: userData.is_private || false,
-                isVerified: userData.is_verified || false,
-                profilePicUrl: userData.profile_pic_url_hd || '',
-                externalUrl: userData.external_url || '',
-            };
-        } catch (error) {
-            console.error(`[IG-Web] Erro ao buscar perfil @${username}:`, error);
-            return null;
+            if (userData) {
+                return {
+                    pk: parseInt(userData.id || '0', 10),
+                    username: userData.username || '',
+                    fullName: userData.full_name || '',
+                    biography: userData.biography || '',
+                    followerCount: userData.edge_followed_by?.count || 0,
+                    followingCount: userData.edge_follow?.count || 0,
+                    mediaCount: userData.edge_owner_to_timeline_media?.count || 0,
+                    isPrivate: userData.is_private || false,
+                    isVerified: userData.is_verified || false,
+                    profilePicUrl: userData.profile_pic_url_hd || '',
+                    externalUrl: userData.external_url || '',
+                };
+            }
+        } catch (err: any) {
+            console.warn(`[IG-Web] web_profile_info falhou para @${username}: ${err.message}`);
         }
+
+        // Tentativa 2: fallback via /<username>/?__a=1&__d=dis
+        try {
+            const response = await fetch(`${BASE_URL}/${username}/?__a=1&__d=dis`, {
+                method: 'GET',
+                headers: this.getAjaxHeaders(),
+                ...this.getFetchOptions(10000),
+            });
+
+            const setCookies = response.headers.getSetCookie?.() || [];
+            this.parseCookies(setCookies);
+
+            if (response.ok) {
+                const data = await response.json();
+                const userData = data?.graphql?.user || data?.data?.user;
+                if (userData) {
+                    return {
+                        pk: parseInt(userData.id || '0', 10),
+                        username: userData.username || '',
+                        fullName: userData.full_name || '',
+                        biography: userData.biography || '',
+                        followerCount: userData.edge_followed_by?.count || 0,
+                        followingCount: userData.edge_follow?.count || 0,
+                        mediaCount: userData.edge_owner_to_timeline_media?.count || 0,
+                        isPrivate: userData.is_private || false,
+                        isVerified: userData.is_verified || false,
+                        profilePicUrl: userData.profile_pic_url_hd || userData.profile_pic_url || '',
+                        externalUrl: userData.external_url || '',
+                    };
+                }
+            }
+        } catch (err: any) {
+            console.warn(`[IG-Web] Fallback /?__a=1 falhou para @${username}: ${err.message}`);
+        }
+
+        console.error(`[IG-Web] Não foi possível obter info de @${username} por nenhum método`);
+        return null;
     }
 
     async getAccountInfo(): Promise<IGWebUser | null> {

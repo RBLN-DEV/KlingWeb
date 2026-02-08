@@ -237,6 +237,50 @@ router.post('/unfollow', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
+ * POST /api/instagram-bot/follow-by-id
+ * Seguir por userId numérico (sem resolver username — rápido)
+ */
+router.post('/follow-by-id', asyncHandler(async (req: Request, res: Response) => {
+    const { userId } = req.body;
+    if (!userId) {
+        res.status(400).json({ success: false, error: 'userId numérico é obrigatório' });
+        return;
+    }
+
+    const bot = getBot(req);
+    const numericId = parseInt(String(userId), 10);
+    if (isNaN(numericId)) {
+        res.status(400).json({ success: false, error: 'userId deve ser um número' });
+        return;
+    }
+
+    const ok = await bot.followUserById(numericId);
+    res.json({ success: ok, message: ok ? `Seguindo userId ${numericId}` : 'Falha ao seguir' });
+}));
+
+/**
+ * POST /api/instagram-bot/unfollow-by-id
+ * Unfollow por userId numérico
+ */
+router.post('/unfollow-by-id', asyncHandler(async (req: Request, res: Response) => {
+    const { userId } = req.body;
+    if (!userId) {
+        res.status(400).json({ success: false, error: 'userId numérico é obrigatório' });
+        return;
+    }
+
+    const bot = getBot(req);
+    const numericId = parseInt(String(userId), 10);
+    if (isNaN(numericId)) {
+        res.status(400).json({ success: false, error: 'userId deve ser um número' });
+        return;
+    }
+
+    const ok = await bot.unfollowUserById(numericId);
+    res.json({ success: ok, message: ok ? `Unfollow userId ${numericId}` : 'Falha ao unfollow' });
+}));
+
+/**
  * GET /api/instagram-bot/user/:username
  * Informações de um perfil
  */
@@ -244,7 +288,7 @@ router.get('/user/:username', asyncHandler(async (req: Request, res: Response) =
     const bot = getBot(req);
     const info = await bot.getUserInfo(req.params.username as string);
     if (!info) {
-        res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+        res.status(404).json({ success: false, error: 'Usuário não encontrado ou timeout na consulta' });
         return;
     }
     res.json({ success: true, data: info });

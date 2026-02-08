@@ -101,7 +101,7 @@ export function SocialHub() {
             <div>
               <h1 className="text-3xl font-bold text-white">Social Hub</h1>
               <p className="text-[#b0b0b0] mt-0.5">
-                Gerencie suas redes sociais e publique conteúdo
+                Conecte e publique nas suas redes sociais
               </p>
             </div>
           </div>
@@ -114,6 +114,25 @@ export function SocialHub() {
               Métricas
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
+          </div>
+        </div>
+
+        {/* Guia rápido para novos usuários */}
+        <div className="mt-4 p-4 bg-[#1e1e2e] border border-[#7e57c2]/30 rounded-xl">
+          <h3 className="text-white font-medium text-sm mb-2">📋 Como funciona (3 passos simples):</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-start gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#7e57c2] flex items-center justify-center text-white text-xs font-bold">1</span>
+              <p className="text-[#b0b0b0] text-xs leading-relaxed"><span className="text-white font-medium">Conecte sua conta</span> — clique em "Conectar Instagram" abaixo e digite seu usuário e senha</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#7e57c2] flex items-center justify-center text-white text-xs font-bold">2</span>
+              <p className="text-[#b0b0b0] text-xs leading-relaxed"><span className="text-white font-medium">Gere seu conteúdo</span> — crie imagens ou vídeos nas abas de geração</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#7e57c2] flex items-center justify-center text-white text-xs font-bold">3</span>
+              <p className="text-[#b0b0b0] text-xs leading-relaxed"><span className="text-white font-medium">Publique!</span> — na galeria, clique no botão do Instagram para publicar direto</p>
+            </div>
           </div>
         </div>
       </motion.div>

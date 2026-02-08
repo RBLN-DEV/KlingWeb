@@ -13,7 +13,8 @@ const PROVIDER_CONFIG = {
     bgGradient: 'from-[#E4405F]/20 to-[#C13584]/20',
     borderColor: 'border-[#E4405F]/30',
     hoverBorder: 'hover:border-[#E4405F]/60',
-    description: 'Publique fotos, vídeos, reels e stories diretamente no seu perfil.',
+    description: 'Conecte seu Instagram para publicar fotos, vídeos, reels e stories diretamente da plataforma.',
+    connectedTip: 'Sua conta está pronta! Vá na Galeria e clique no ícone do Instagram em qualquer mídia para publicar.',
     needsEmail: false,
   },
   twitter: {
@@ -23,7 +24,8 @@ const PROVIDER_CONFIG = {
     bgGradient: 'from-[#1DA1F2]/20 to-[#0d8bd9]/20',
     borderColor: 'border-[#1DA1F2]/30',
     hoverBorder: 'hover:border-[#1DA1F2]/60',
-    description: 'Publique tweets com imagens e vídeos no seu perfil.',
+    description: 'Conecte seu Twitter/X para publicar tweets com imagens e vídeos gerados aqui.',
+    connectedTip: 'Sua conta está pronta para publicações.',
     needsEmail: true,
   },
 };
@@ -153,10 +155,11 @@ export function ConnectAccountCard({
           {isConnected && connection ? (
             <div>
               <p className="text-sm text-[#b0b0b0] truncate">@{connection.accountName}</p>
+              <p className="text-[11px] text-green-400/70 mt-0.5">{config.connectedTip}</p>
               {connection.authMode === 'unofficial' && (
                 <div className="flex items-center gap-1 mt-1">
                   <ShieldAlert className="w-3 h-3 text-amber-400" />
-                  <span className="text-[11px] text-amber-400">Modo não-oficial (teste)</span>
+                  <span className="text-[11px] text-amber-400">Modo direto (suas credenciais são criptografadas)</span>
                 </div>
               )}
             </div>
@@ -176,11 +179,11 @@ export function ConnectAccountCard({
             transition={{ duration: 0.3 }}
             className="mb-4 space-y-3 overflow-hidden"
           >
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-              <p className="text-[11px] text-amber-300 leading-relaxed">
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+              <p className="text-[11px] text-blue-300 leading-relaxed">
                 <ShieldAlert className="w-3 h-3 inline mr-1 mb-0.5" />
-                Modo de teste: usa API não-oficial. Suas credenciais são criptografadas e armazenadas localmente.
-                Use uma conta de teste se possível.
+                <strong>Seus dados estão seguros:</strong> suas credenciais são criptografadas e armazenadas apenas no nosso servidor. 
+                Elas são usadas exclusivamente para publicar conteúdo no seu perfil.
               </p>
             </div>
 

@@ -227,12 +227,15 @@ export function InstagramPublishModal({
             {/* ── Bot desconectado — sem conta ── */}
             {botConnected === false && !isLoggingIn && (
               <div className="py-8 space-y-4">
-                <div className="flex flex-col items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                  <WifiOff className="w-10 h-10 text-red-400" />
+                <div className="flex flex-col items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <WifiOff className="w-10 h-10 text-amber-400" />
                   <div className="text-center">
-                    <p className="text-red-400 font-medium">Conta Instagram não conectada</p>
-                    <p className="text-red-400/70 text-xs mt-1">
-                      Conecte sua conta Instagram no Social Hub para publicar
+                    <p className="text-amber-300 font-medium">Instagram ainda não conectado</p>
+                    <p className="text-amber-300/70 text-xs mt-1">
+                      Para publicar, você precisa primeiro conectar sua conta do Instagram.
+                    </p>
+                    <p className="text-amber-300/70 text-xs mt-1">
+                      Vá em <strong>Social Hub</strong>, clique em <strong>"Conectar Instagram"</strong> e digite seu usuário e senha.
                     </p>
                   </div>
                 </div>
@@ -248,7 +251,7 @@ export function InstagramPublishModal({
                   </Button>
                   <Button
                     onClick={handleGoToSocialHub}
-                    className="flex-1 bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+                    className="flex-1 bg-gradient-to-r from-[#7e57c2] to-[#E4405F] hover:opacity-90 text-white"
                   >
                     Ir ao Social Hub
                     <ArrowRight className="w-4 h-4 ml-2" />

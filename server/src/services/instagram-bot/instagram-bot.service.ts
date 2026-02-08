@@ -235,6 +235,30 @@ export class InstagramBotService {
         return this.followersManager.unfollowUser(username);
     }
 
+    /**
+     * Follow direto por userId numérico (sem resolver username → evita travamento)
+     */
+    async followUserById(userId: number): Promise<boolean> {
+        this.ensureLoggedIn();
+        return this.api.followUser(userId);
+    }
+
+    /**
+     * Unfollow direto por userId numérico
+     */
+    async unfollowUserById(userId: number): Promise<boolean> {
+        this.ensureLoggedIn();
+        return this.api.unfollowUser(userId);
+    }
+
+    /**
+     * Like direto por mediaId
+     */
+    async likePostById(mediaId: string): Promise<boolean> {
+        this.ensureLoggedIn();
+        return this.api.likeMedia(mediaId);
+    }
+
     // ── Uploads ────────────────────────────────────────────────────────────
 
     async uploadPhoto(imageBuffer: Buffer, caption: string) {
