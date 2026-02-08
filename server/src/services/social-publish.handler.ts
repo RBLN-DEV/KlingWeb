@@ -24,6 +24,7 @@ import {
 import {
     sendTweet,
 } from './twitter-unofficial.service.js';
+import { decrypt } from './crypto.service.js';
 import { InstagramBotService } from './instagram-bot/instagram-bot.service.js';
 import type { QueueJob, SocialToken } from '../types/social.types.js';
 
@@ -166,17 +167,34 @@ async function publishToInstagramUnofficial(
     // Garantir que o bot está logado
     if (!bot.getStatus().isLoggedIn) {
         console.log('[IG-WebAPI] Bot não logado, tentando login automático...');
-        const username = token.providerUsername || process.env.INSTAGRAM_USERNAME || '';
-        const password = token.metadata?.igPassword || process.env.INSTAGRAM_PASSWORD || '';
-        if (username && password) {
-            const loginOk = await bot.loginDirect(username, password);
+        
+        // Preferir loginFromToken (tenta cookies primeiro, depois re-login com decrypt)
+        try {
+            const loginOk = await bot.loginFromToken(token);
             if (!loginOk) {
-                throw new Error('Falha no login do bot via Web API');
+                throw new Error('loginFromToken retornou false');
             }
-        } else {
-            // Tentar auto-login a partir dos tokens salvos
-            const autoOk = await bot.autoLogin(appUserId);
-            if (!autoOk) {
+        } catch (tokenLoginErr: any) {
+            console.warn('[IG-WebAPI] loginFromToken falhou:', tokenLoginErr.message);
+            
+            // Fallback: login direto com credenciais descriptografadas
+            const username = token.providerUsername || process.env.INSTAGRAM_USERNAME || '';
+            let password = '';
+            if (token.metadata?.igPassword) {
+                try {
+                    password = decrypt(token.metadata.igPassword as string);
+                } catch {
+                    password = '';
+                }
+            }
+            if (!password) password = process.env.INSTAGRAM_PASSWORD || '';
+            
+            if (username && password) {
+                const loginOk = await bot.loginDirect(username, password);
+                if (!loginOk) {
+                    throw new Error('Falha no login do bot via Web API');
+                }
+            } else {
                 throw new Error('Bot não autenticado e credenciais não disponíveis');
             }
         }
@@ -190,11 +208,23 @@ async function publishToInstagramUnofficial(
         destination = 'story';
     }
 
+    // Determinar tipo real de mídia (image/video) separado do destino (feed/story/reel)
+    // mediaType do job pode ser 'image', 'video', 'story', 'reel'
+    // Para publishFromUrl, precisamos do tipo real: 'image' ou 'video'
+    let realMediaType: 'image' | 'video' | undefined;
+    if (mediaType === 'image' || mediaType === 'story') {
+        // story pode ser imagem ou vídeo; detectar pela URL
+        const isVideoUrl = /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(mediaUrl);
+        realMediaType = isVideoUrl ? 'video' : 'image';
+    } else if (mediaType === 'video' || mediaType === 'reel') {
+        realMediaType = 'video';
+    }
+
     const result = await bot.publishFromUrl({
         mediaUrl,
         caption,
         destination,
-        mediaType: (mediaType === 'image') ? 'image' : 'video',
+        mediaType: realMediaType,
     });
 
     if (!result.success) {

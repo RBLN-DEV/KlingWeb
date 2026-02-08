@@ -25,7 +25,7 @@ import type { SocialToken, PlatformMediaLimits } from '../types/social.types.js'
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ProxyAgent as UndiciProxyAgent, type Dispatcher } from 'undici';
+import { ProxyAgent as UndiciProxyAgent, Agent as UndiciAgent, type Dispatcher } from 'undici';
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 
@@ -149,8 +149,28 @@ export class InstagramWebAPI {
 
     setProxy(proxyUrl: string): void {
         this.proxyUrl = proxyUrl;
-        this.proxyAgent = new UndiciProxyAgent(proxyUrl);
-        console.log(`[IG-Web] Proxy configurado: ${proxyUrl.substring(0, 40)}...`);
+
+        // Extrair credenciais da URL do proxy para autenticação
+        const parsed = new URL(proxyUrl);
+        const proxyToken = parsed.username && parsed.password
+            ? `Basic ${Buffer.from(`${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`).toString('base64')}`
+            : undefined;
+
+        // proxyTls: conexão TLS com o servidor proxy (aceitar certs expirados/self-signed)
+        // requestTls: conexão TLS com o destino final (instagram.com) - manter validação
+        this.proxyAgent = new UndiciProxyAgent({
+            uri: proxyUrl,
+            proxyTls: {
+                rejectUnauthorized: false,
+            },
+            token: proxyToken,
+        });
+        console.log(`[IG-Web] Proxy configurado: ${proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}`);
+    }
+
+    clearProxy(): void {
+        this.proxyUrl = null;
+        this.proxyAgent = null;
     }
 
     // ── Delay helper ───────────────────────────────────────────────────────

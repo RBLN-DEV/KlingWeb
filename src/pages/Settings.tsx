@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { ProxyDashboard } from '@/components/ProxyDashboard';
 
 const TABS = [
   { id: 'profile', label: 'Perfil', icon: User },
@@ -634,6 +635,9 @@ export function Settings() {
                   </div>
                 </div>
               </div>
+
+              {/* Decodo Proxy Dashboard */}
+              <ProxyDashboard />
             </motion.div>
           </TabsContent>
 

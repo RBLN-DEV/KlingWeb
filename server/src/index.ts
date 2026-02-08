@@ -16,6 +16,7 @@ import adminRoutes from './routes/admin.routes.js';
 import socialRoutes from './routes/social.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import instagramBotRoutes from './routes/instagram-bot.routes.js';
+import decodoProxyRoutes from './routes/decodo-proxy.routes.js';
 import { ensureDefaultAdmin, initUserStore } from './services/user.store.js';
 import { initTokenStore } from './services/social-token.store.js';
 import { socialQueue } from './services/social-queue.service.js';
@@ -43,9 +44,22 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Servir arquivos temporários (imagens geradas) — path persistente em produção
-const TEMP_UPLOADS_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
-    ? '/home/temp_uploads'
-    : path.join(process.cwd(), 'temp_uploads');
+function getTempUploadsDir(): string {
+    if (process.env.NODE_ENV === 'production') {
+        try {
+            const homeDir = '/home/temp_uploads';
+            fs.mkdirSync(homeDir, { recursive: true });
+            fs.accessSync(homeDir, fs.constants.W_OK);
+            return homeDir;
+        } catch {
+            const appDir = '/app/temp_uploads';
+            fs.mkdirSync(appDir, { recursive: true });
+            return appDir;
+        }
+    }
+    return path.join(process.cwd(), 'temp_uploads');
+}
+const TEMP_UPLOADS_DIR = getTempUploadsDir();
 if (!fs.existsSync(TEMP_UPLOADS_DIR)) {
     fs.mkdirSync(TEMP_UPLOADS_DIR, { recursive: true });
 }
@@ -60,6 +74,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/instagram-bot', instagramBotRoutes);
+app.use('/api/decodo', decodoProxyRoutes);
 
 // Garantir admin padrão
 ensureDefaultAdmin();

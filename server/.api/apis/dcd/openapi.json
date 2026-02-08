@@ -1,0 +1,1287 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Smartproxy",
+    "version": "1.2"
+  },
+  "servers": [
+    {
+      "url": "https://api.decodo.com"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization"
+      }
+    }
+  },
+  "security": [
+    {
+      "sec0": []
+    }
+  ],
+  "paths": {
+    "/v2/endpoints/{type}": {
+      "get": {
+        "summary": "Get endpoints by type",
+        "description": "Get a list of endpoints by a specified type for Residential subscription",
+        "operationId": "get-endpoints-by-type",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "description": "Possible parameters: random, sticky",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "[\n  0:{\n    \"location\":\"Random\"\n    \"hostname\":\"gate.smartproxy.com\"\n    \"port_range\":\"7000\"\n  }\n  1:{\n    \"location\":\"Canada\"\n    \"hostname\":\"ca.smartproxy.com\"\n    \"port_range\":\"20000\"\n}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"bad_request\"\n  \"message\":\"Bad proxy type provided.\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": []
+      }
+    },
+    "/v2/endpoints": {
+      "get": {
+        "summary": "Get endpoints",
+        "description": "Get types of endpoints for Residential subscription",
+        "operationId": "get-endpoints",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "[\n  0:{\n    \"type\":\"random\"\n    \"available_locations\":\"148\"\n    \"url\":\"endpoints/random\"\n  }\n  1:{\n    \"type\":\"sticky\"\n    \"available_locations\":\"62\"\n    \"url\":\"endpoints/sticky\"\n  }\n]"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": []
+      }
+    },
+    "/v2/endpoints-custom/back-connect": {
+      "get": {
+        "summary": "Generate custom back connect endpoints",
+        "description": "Generate custom back connect endpoints for proxying for Residential subscription. If a default value is preset you don't need to actually include it in the request param query.",
+        "operationId": "generate-custom-back-connect-endpoints",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "description": "Provide username for authorization. This param is **required**.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "description": "Provide password for authorization. This param is **required**.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_type",
+            "in": "query",
+            "description": "Choose what session type should be used. Choose `sticky` for sticky sessions or `random` for rotating sessions. Default is `sticky`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sticky",
+                "random"
+              ],
+              "default": "sticky"
+            }
+          },
+          {
+            "name": "session_time",
+            "in": "query",
+            "description": "Session time in minutes, range is 1-1440(inclusive).  This param is **required** if param `sessionType` value is `sticky`. Default value is 10.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "description": "Country Alpha2 code in lower case.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "You can select state if country is USA(`us`). Provide full state name with underscore instead of a space. E.g. `new_york`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "description": "Full city name in lowercase with underscore instead of a space. E.g. `new_orleans`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "output_format",
+            "in": "query",
+            "description": "Output format type. Default is `protocol:auth@endpoint`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "protocol:auth@endpoint",
+                "endpoint:auth",
+                "auth@endpoint"
+              ],
+              "default": "protocol:auth@endpoint"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "description": "Count of routes that will be generated and returned. Min value is 1. Default is 10.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page of the routes(pagination). Min value is 1. Default is 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "response_format",
+            "in": "query",
+            "description": "What response type will be returned. Could be `json`, `txt` or `html`. Default is `json`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt",
+                "html"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "line_break",
+            "in": "query",
+            "description": "What line break will be used in response content. This is **required** if param `responseType` value is `txt`. Default is `\\n`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "\\n",
+                "\\r\\n",
+                "\\r",
+                "\\t"
+              ],
+              "default": "\\n"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "description": "What domain should be used for routes. Default is dedoco.com. ip is for using IP address instead of a domain.",
+            "schema": {
+              "type": "string",
+              "default": "gate.decodo.com"
+            }
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "description": "IP address to be used instead of a domain. This field is **required** if param `domain` value is `ip`. It always must contain port at the end e.g. `1.1.1.1:7000`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "description": "What protocol should be used. Default is `http`",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http",
+                "https"
+              ],
+              "default": "http"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "[\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10000\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10001\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10002\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10003\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10004\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10005\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10006\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10007\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10008\",\n\t\"http:\\/\\/user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10009\"\n]"
+                  }
+                },
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "example": "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10000"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n\t\"message\": \"Invalid data provided.\",\n\t\"violations\": [\n\t\t\"sessionType: The value you selected is not a valid choice.\"\n\t]\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Invalid data provided."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "sessionType: The value you selected is not a valid choice."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": []
+      }
+    },
+    "/v2/endpoints-custom": {
+      "get": {
+        "summary": "Generate custom endpoints",
+        "description": "Generate custom endpoints for proxying for Residential and Datacenter Pay per GB (DEPRECATED) subscriptions. If a default value is preset you don't need to actually include it in the request param query.",
+        "operationId": "generate-custom-endpoints",
+        "parameters": [
+          {
+            "name": "proxy_type",
+            "in": "query",
+            "required": false,
+            "description": "For what proxy type wish to generate routes. Default and only option  is `residential_proxies`.",
+            "schema": {
+              "type": "string",
+              "default": "residential_proxies"
+            }
+          },
+          {
+            "name": "auth_type",
+            "in": "query",
+            "description": "Provide what authorization method you want to use, it could be `basic` or `whitelist`. Default is `basic`. `whitelist` only works when param `proxyType` value is `residential_proxies`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "whitelist"
+              ],
+              "default": "basic"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "Provide username for authorization. This param is **required** if param `authType` value is `basic`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "description": "Provide password for authorization. This param is **required** if param `authType` value is `basic`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_type",
+            "in": "query",
+            "description": "Choose what session type should be used. Choose `sticky` for sticky sessions or `random` for rotating sessions. Default is `sticky`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sticky",
+                "random"
+              ],
+              "default": "sticky"
+            }
+          },
+          {
+            "name": "session_time",
+            "in": "query",
+            "description": "Session time in minutes, range is 1-1440(inclusive).  This param is **required** if param `proxyType` value is `residential_proxies` and param `authType` value is `basic` and param `sessionType` value is `sticky`. Default is 10.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "description": "One of available locations in lowercase, could be country Alpha-2 code, city or state name. To get available places, please check _Get endpoints by type_. Default is `random`.",
+            "schema": {
+              "type": "string",
+              "default": "random"
+            }
+          },
+          {
+            "name": "output_format",
+            "in": "query",
+            "description": "Output format type. Default is `protocol:auth@endpoint`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "protocol:auth@endpoint",
+                "endpoint:auth",
+                "auth@endpoint"
+              ],
+              "default": "protocol:auth@endpoint"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "description": "Count of routes that will be generated and returned. Min value is 1, max value depends on param `page` and specific location. Default is 10.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page of the routes(pagination). Min value is 1, max value depends on param `count` and specific location. Default is 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "response_format",
+            "in": "query",
+            "description": "What response type will be returned. Could be `json`, `txt` or `html`. Default is `json`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt",
+                "html"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "line_break",
+            "in": "query",
+            "description": "What line break will be used in response content. This is **required** if param `responseType` value is `txt`. Default is `\\n`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "\\n",
+                "\\r\\n",
+                "\\r",
+                "\\t"
+              ],
+              "default": "\\n"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "description": "What domain should be used for routes. Default is `dedoco.com`. `ip` is for using IP address instead of a domain.",
+            "schema": {
+              "type": "string",
+              "default": "decodo.com"
+            }
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "description": "IP address to be used instead of a domain. This field is **required** if param `domain` value is `ip`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": [
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10000",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10001",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10002",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10003",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10004",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10005",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10006",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10007",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10008",
+                      "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10009"
+                    ]
+                  }
+                },
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "example": "http://user-smith-sessionduration-1:ao5nf23j4n@gate.visitxiangtan.com:10000"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n\t\"message\": \"Invalid data provided.\",\n\t\"violations\": [\n\t\t\"sessionType: The value you selected is not a valid choice.\"\n\t]\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Invalid data provided."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "sessionType: The value you selected is not a valid choice."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": []
+      }
+    },
+    "/v2/sub-users": {
+      "get": {
+        "summary": "Get sub users",
+        "description": "Get a list of active sub users for Residential subscription",
+        "operationId": "get-sub-users",
+        "parameters": [
+          {
+            "name": "service_type",
+            "in": "query",
+            "description": "Possible parameters: residential_proxies",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "[\n  0:{\n    \"id\":24570,\n    \"username\":\"name\",\n    \"status\":\"active\",\n    \"created_at\":\"2019-03-23 13:08\",\n    \"traffic\" : 1.13,\n    \"traffic_limit\":NULL,\n    \"service_type\":\"residential_proxies\",\n    \"traffic_count_from\":\"2019-03-23 13:10\",\n    \"auto_disable\":false\n  }\n]"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create sub user",
+        "description": "Create a new sub user for Residential subscription",
+        "operationId": "create-sub-user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password",
+                  "service_type"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "description": "From 6 to 64 characters long. Only letters, numbers and underscores allowed.",
+                    "format": "json"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "9 or more characters. Must include at least one upper case letter and a number. Symbols @ and : are not allowed",
+                    "format": "json"
+                  },
+                  "service_type": {
+                    "type": "string",
+                    "description": "Possible parameters: residential_proxies, shared_proxies",
+                    "default": "residential_proxies"
+                  },
+                  "traffic_limit": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "auto_disable": {
+                    "type": "boolean",
+                    "description": "Disables subuser when the traffic limit is hit",
+                    "default": false
+                  },
+                  "traffic_count_from": {
+                    "type": "string",
+                    "description": "Handles subuser subscription traffic starting from the specified date. Use date format yyyy-mm-dd hh:mm:ss.",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\": \"bad_request\",\n  \"message\": \"Can not process request\",\n  \"error\": {\n    \"username\": \"username must be between 3 and 64 characters. Only numbers, characters and underscore are allowed\",\n    \"password\": \"password must be between 9 and 64 characters and must contain at least one number. Symbols @ and : are invalid\"\n  }\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "type": "string",
+                      "example": "bad_request"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Can not process request"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "username": {
+                          "type": "string",
+                          "example": "username must be between 3 and 64 characters. Only numbers, characters and underscore are allowed"
+                        },
+                        "password": {
+                          "type": "string",
+                          "example": "password must be between 9 and 64 characters and must contain at least one number. Symbols @ and : are invalid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/sub-users/{sub_user_id}": {
+      "get": {
+        "summary": "Get sub user",
+        "description": "Get a single active sub user",
+        "operationId": "get-sub-user",
+        "parameters": [
+          {
+            "name": "sub_user_id",
+            "in": "path",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"id\": 1,\n  \"username\": \"name\",\n  \"status\": \"active\",\n  \"created_at\": \"2021-07-01 00:00\",\n  \"traffic\": 0,\n  \"traffic_limit\": null,\n  \"service_type\": \"type\",\n  \"traffic_count_from\": null,\n  \"auto_disable\": false\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "example": 1,
+                      "default": 0
+                    },
+                    "username": {
+                      "type": "string",
+                      "example": "name"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "active"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "example": "2021-07-01 00:00"
+                    },
+                    "traffic": {
+                      "type": "integer",
+                      "example": 0,
+                      "default": 0
+                    },
+                    "traffic_limit": {},
+                    "service_type": {
+                      "type": "string",
+                      "example": "type"
+                    },
+                    "traffic_count_from": {},
+                    "auto_disable": {
+                      "type": "boolean",
+                      "example": false,
+                      "default": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\": \"bad_request\",\n  \"message\": \"Can not process request\"\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "type": "string",
+                      "example": "bad_request"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Can not process request"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      },
+      "put": {
+        "summary": "Update sub user",
+        "description": "Update password or traffic limit of specified sub user",
+        "operationId": "update-sub-user",
+        "parameters": [
+          {
+            "name": "sub_user_id",
+            "in": "path",
+            "description": "\"Get sub users\" received sub user ID",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "traffic_limit": {
+                    "type": "number",
+                    "description": "Traffic limit",
+                    "format": "float"
+                  },
+                  "auto_disable": {
+                    "type": "boolean",
+                    "description": "Disables subuser when the traffic limit is hit",
+                    "default": false
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "json"
+                  },
+                  "traffic_count_from": {
+                    "type": "string",
+                    "description": "Handles subuser subscription traffic starting from the specified date. Use date format yyyy-mm-dd hh:mm:ss.",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Possible values: 'active' or 'disabled'"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\": \"bad_request\",\n  \"message\": \"Can not process request\",\n  \"error\": {\n    \"password\": \"password must be between 9 and 64 characters and must contain at least one number. Symbols @ and : are invalid\"\n  }\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "type": "string",
+                      "example": "bad_request"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Can not process request"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "password": {
+                          "type": "string",
+                          "example": "password must be between 9 and 64 characters and must contain at least one number. Symbols @ and : are invalid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      },
+      "delete": {
+        "summary": "Delete sub user",
+        "description": "Delete specified sub user",
+        "operationId": "delete-sub-user",
+        "parameters": [
+          {
+            "name": "sub_user_id",
+            "in": "path",
+            "description": "\"Get sub users\" received sub user ID",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "204",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/sub-users/{sub_user_id}/traffic": {
+      "get": {
+        "summary": "Get sub user traffic",
+        "description": "Get traffic usage of specified sub user",
+        "operationId": "get-sub-user-traffic",
+        "parameters": [
+          {
+            "name": "sub_user_id",
+            "in": "path",
+            "description": "\"Get sub users\" received sub user ID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Available types: 24h, 7days, month, custom. If custom type is selected you can provide **from** and **to** parameters or leave them empty and then they will have default values, sub-user creation date, and current date respectively.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Use date format yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Use date format yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "service_type",
+            "in": "query",
+            "description": "Possible parameters: residential_proxies",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n\"traffic\": 4.7,\n\"traffic_rx\": 4.2,\n\"traffic_tx\": 0.5\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "traffic": {
+                      "type": "number",
+                      "example": 4.7,
+                      "default": 0
+                    },
+                    "traffic_rx": {
+                      "type": "number",
+                      "example": 4.2,
+                      "default": 0
+                    },
+                    "traffic_tx": {
+                      "type": "number",
+                      "example": 0.5,
+                      "default": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/allocated-traffic-limit": {
+      "get": {
+        "summary": "Get allocated sub user traffic",
+        "description": "Get allocated traffic across all of your sub users for Residential subscription",
+        "operationId": "get-allocated-sub-user-traffic",
+        "parameters": [
+          {
+            "name": "service_type",
+            "in": "query",
+            "description": "Possible parameters: residential_proxies",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n\"allocated_traffic_limit\":728\n}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "allocated_traffic_limit": {
+                      "type": "integer",
+                      "example": 728,
+                      "default": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/whitelisted-ips": {
+      "get": {
+        "summary": "Get whitelisted IPs",
+        "description": "Get a list of whitelisted IPs for Residential subscription",
+        "operationId": "get-whitelisted-ips",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "[\n  0:{\n    \"id\":69489\n    \"ip\":\"127.0.0.1\"\n    \"enabled\":true\n    \"created_at\":\"2019-05-22 12:44\"\n\t}\n]"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      },
+      "post": {
+        "summary": "Add whitelisted IPs",
+        "description": "Whitelist your IPs here for Residential subscription",
+        "operationId": "add-whitelisted-ips",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "IPAddressList": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"bad_request\"\n  \"message\":\"Can not process request\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/whitelisted-ips/{id}": {
+      "delete": {
+        "summary": "Delete whitelisted IP",
+        "description": "Delete a specified whitelisted IP",
+        "operationId": "delete-whitelisted-ip",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Type in the ID of IP here - [Get Whitelisted IPs](https://help.smartproxy.com/reference#get-whitelisted-ips)",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "204",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{}"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"bad_request\"\n  \"message\":\"Can not process request\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v2/subscriptions": {
+      "get": {
+        "summary": "Get subscriptions",
+        "description": "Detailed information about your current subscription for Residential subscription",
+        "operationId": "get-subscriptions",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n\"traffic_limit\":\"50\"\n\"traffic_per_period\":\"0.15\"\n\"users_limit\":3\n\"ip_address_limit\":2\n\"valid_from\":\"2018-11-08\"\n\"valid_until\":\"2019-06-30\"\n\"service_type\":\"residential_proxies\"\n}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Result": {
+                    "value": "{\n  \"error_code\":\"not_found\"\n  \"message\":\"Resource not found\"\n}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    }
+  },
+  "x-readme": {
+    "headers": [],
+    "explorer-enabled": true,
+    "proxy-enabled": true
+  },
+  "x-readme-fauxas": true
+}

@@ -1,12 +1,43 @@
 [
   {
-    "id": "d3166484-75a3-4dc0-8f03-14ed4702c326",
+    "id": "46636f84-1d5e-493b-bd0c-4dfcbb3c75b2",
+    "name": "Test User",
+    "email": "test@test.com",
+    "passwordHash": "83d4904facf23a5ce335648ebab1ecd08647aef8aac713aa7f8a67178646f11d",
+    "role": "user",
+    "status": "pending",
+    "createdAt": "2026-02-08T17:09:32.172Z",
+    "updatedAt": "2026-02-08T17:09:32.172Z"
+  },
+  {
+    "id": "939c6dc0-8357-4ca8-a2c3-eb67f63b5525",
+    "name": "Admin",
+    "email": "admin@klingweb.com",
+    "passwordHash": "95f7ad3def0db200dd4609ae4aa771741cff56a93debddf6443db3168ebfe4e2",
+    "role": "admin",
+    "status": "approved",
+    "createdAt": "2026-02-08T17:42:50.363Z",
+    "updatedAt": "2026-02-08T18:21:50.498Z",
+    "approvedBy": "c62b8122-13f2-4f48-9837-101f4ce37d39"
+  },
+  {
+    "id": "99c29b9b-fcc3-4d05-a489-0d9fb4efe322",
+    "name": "Test User",
+    "email": "testuser@test.com",
+    "passwordHash": "83d4904facf23a5ce335648ebab1ecd08647aef8aac713aa7f8a67178646f11d",
+    "role": "user",
+    "status": "pending",
+    "createdAt": "2026-02-08T17:09:41.939Z",
+    "updatedAt": "2026-02-08T17:09:41.939Z"
+  },
+  {
+    "id": "c62b8122-13f2-4f48-9837-101f4ce37d39",
     "name": "Administrador",
     "email": "admin@klingai.com",
     "passwordHash": "95f7ad3def0db200dd4609ae4aa771741cff56a93debddf6443db3168ebfe4e2",
     "role": "admin",
     "status": "approved",
-    "createdAt": "2026-02-08T00:38:30.528Z",
-    "updatedAt": "2026-02-08T00:38:30.528Z"
+    "createdAt": "2026-02-08T13:08:39.223Z",
+    "updatedAt": "2026-02-08T13:08:39.223Z"
   }
 ]

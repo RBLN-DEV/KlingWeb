@@ -17,10 +17,25 @@ import {
 const router = Router();
 
 // Configurar multer para upload de vídeos de referência
-// Em produção, usar /home/temp_videos para persistência; em dev, usar CWD
-const TEMP_VIDEO_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
-    ? '/home/temp_videos'
-    : path.join(process.cwd(), 'temp_videos');
+// Em produção no Azure, /home é persistente; em Docker genérico, /app/temp_videos; em dev, CWD
+function getTempVideoDir(): string {
+    if (process.env.NODE_ENV === 'production') {
+        // Tentar /home/temp_videos (Azure App Service)
+        try {
+            const homeDir = '/home/temp_videos';
+            fs.mkdirSync(homeDir, { recursive: true });
+            fs.accessSync(homeDir, fs.constants.W_OK);
+            return homeDir;
+        } catch {
+            // Fallback para /app/temp_videos (Docker genérico)
+            const appDir = '/app/temp_videos';
+            fs.mkdirSync(appDir, { recursive: true });
+            return appDir;
+        }
+    }
+    return path.join(process.cwd(), 'temp_videos');
+}
+const TEMP_VIDEO_DIR = getTempVideoDir();
 if (!fs.existsSync(TEMP_VIDEO_DIR)) {
     fs.mkdirSync(TEMP_VIDEO_DIR, { recursive: true });
 }

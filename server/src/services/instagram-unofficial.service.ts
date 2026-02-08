@@ -117,6 +117,14 @@ export async function loginInstagramUnofficial(
         console.log(`[IG-Unofficial] Usando proxy: ${process.env.INSTAGRAM_PROXY.replace(/\/\/.*@/, '//***@')}`);
     }
 
+    // Temporariamente desabilitar validação de cert TLS para o proxy
+    // (proxies residenciais como Decodo podem ter certs expirados/self-signed).
+    // Isso é seguro pois o túnel CONNECT garante criptografia fim-a-fim com o Instagram.
+    const prevTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    if (process.env.INSTAGRAM_PROXY?.startsWith('https://')) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    }
+
     // Delay helper para simular comportamento humano
     const delay = (ms: number) => new Promise(r => setTimeout(r, ms + Math.random() * 1000));
 
@@ -172,6 +180,13 @@ export async function loginInstagramUnofficial(
     } catch (error) {
         console.error(`[IG-Unofficial] Erro no login de @${credentials.username}:`, error);
         throw error;
+    } finally {
+        // Restaurar validação de cert TLS
+        if (prevTlsReject === undefined) {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        } else {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTlsReject;
+        }
     }
 }
 

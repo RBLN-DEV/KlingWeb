@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "dcd",
+      "source": "@dcd/v1.0#fi2jfrmc8vpsrq",
+      "integrity": "sha512-eoTXY+l59as59u0FUz6an2ckz/kta+3sbAK1UBIOlNteG/NQzaxtqT9ADO6UWdBaZWa1M5spEgCueCKLRbYSVw==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

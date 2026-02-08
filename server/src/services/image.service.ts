@@ -38,12 +38,26 @@ export class ImageService {
         this.initializeClients();
 
         // Diretório para arquivos temporários — persistente em produção
-        this.tempDir = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
-            ? '/home/temp_uploads'
-            : path.join(process.cwd(), 'temp_uploads');
+        this.tempDir = this.resolveTempDir();
         if (!fs.existsSync(this.tempDir)) {
             fs.mkdirSync(this.tempDir, { recursive: true });
         }
+    }
+
+    private resolveTempDir(): string {
+        if (process.env.NODE_ENV === 'production') {
+            try {
+                const homeDir = '/home/temp_uploads';
+                fs.mkdirSync(homeDir, { recursive: true });
+                fs.accessSync(homeDir, fs.constants.W_OK);
+                return homeDir;
+            } catch {
+                const appDir = '/app/temp_uploads';
+                fs.mkdirSync(appDir, { recursive: true });
+                return appDir;
+            }
+        }
+        return path.join(process.cwd(), 'temp_uploads');
     }
 
     // Inicializar clientes de API
@@ -66,9 +80,7 @@ export class ImageService {
         }
 
         // Diretório para arquivos temporários — persistente em produção
-        this.tempDir = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
-            ? '/home/temp_uploads'
-            : path.join(process.cwd(), 'temp_uploads');
+        this.tempDir = this.resolveTempDir();
         if (!fs.existsSync(this.tempDir)) {
             fs.mkdirSync(this.tempDir, { recursive: true });
         }

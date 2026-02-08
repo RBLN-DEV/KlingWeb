@@ -38,3 +38,9 @@ temp_verify/
 logs_error_400/
 logs_extracted/
 logs_temp/
+server/data/decodo-config.json
+server/data/proxy-config.json
+server/data/social-tokens.json
+server/data/publications.json
+server/data/social-queue.json
+server/data/bot_analytics_data.json
