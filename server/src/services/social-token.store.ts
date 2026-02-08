@@ -199,6 +199,14 @@ export function getUserTokens(userId: string): PublicSocialToken[] {
 }
 
 /**
+ * Lista todos os tokens completos de um usuário (uso interno apenas — inclui metadata)
+ */
+export function getUserTokensFull(userId: string): SocialToken[] {
+    const tokens = readTokens();
+    return tokens.filter(t => t.userId === userId && t.isActive);
+}
+
+/**
  * Lista tokens ativos de um usuário para um provider específico
  */
 export function getUserProviderTokens(userId: string, provider: SocialProvider): PublicSocialToken[] {

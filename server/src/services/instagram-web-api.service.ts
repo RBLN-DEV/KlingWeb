@@ -966,6 +966,113 @@ export class InstagramWebAPI {
         }
     }
 
+    // ── Hashtag Search (GraphQL) ───────────────────────────────────────────
+
+    async hashtagMedias(hashtag: string, amount = 20): Promise<IGWebMedia[]> {
+        try {
+            const tag = hashtag.replace(/^#/, '').trim();
+            const data = await this.apiGet(`tags/${tag}/`, {
+                __a: '1',
+                __d: 'dis',
+            });
+
+            // Fallback: tentar via GraphQL
+            if (!data?.data && !data?.graphql) {
+                // tentar endpoint web
+                const response = await fetch(`${BASE_URL}/explore/tags/${tag}/?__a=1&__d=dis`, {
+                    method: 'GET',
+                    headers: this.getAjaxHeaders(),
+                    ...this.getFetchOptions(),
+                });
+
+                if (!response.ok) return [];
+
+                const setCookies = response.headers.getSetCookie?.() || [];
+                this.parseCookies(setCookies);
+
+                const webData = await response.json();
+                const edges = webData?.graphql?.hashtag?.edge_hashtag_to_media?.edges
+                    || webData?.data?.hashtag?.edge_hashtag_to_media?.edges
+                    || [];
+
+                return edges.slice(0, amount).map((edge: any) => {
+                    const node = edge.node;
+                    return {
+                        pk: parseInt(node.id, 10),
+                        id: node.id,
+                        code: node.shortcode,
+                        captionText: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+                        likeCount: node.edge_liked_by?.count || 0,
+                        commentCount: node.edge_media_to_comment?.count || 0,
+                        mediaType: node.is_video ? 2 : 1,
+                        imageUrl: node.display_url || '',
+                        userId: node.owner?.id ? parseInt(node.owner.id, 10) : undefined,
+                    } as IGWebMedia;
+                });
+            }
+
+            const edges = data?.data?.top?.sections?.[0]?.layout_content?.medias
+                || data?.graphql?.hashtag?.edge_hashtag_to_media?.edges
+                || [];
+
+            return edges.slice(0, amount).map((item: any) => {
+                const media = item.media || item.node || item;
+                return {
+                    pk: parseInt(media.id || media.pk || '0', 10),
+                    id: String(media.id || media.pk || ''),
+                    code: media.code || media.shortcode || '',
+                    captionText: media.caption?.text || media.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+                    likeCount: media.like_count || media.edge_liked_by?.count || 0,
+                    commentCount: media.comment_count || media.edge_media_to_comment?.count || 0,
+                    mediaType: media.media_type || (media.is_video ? 2 : 1),
+                    imageUrl: media.image_versions2?.candidates?.[0]?.url || media.display_url || '',
+                    userId: media.user?.pk || media.owner?.id ? parseInt(String(media.user?.pk || media.owner?.id), 10) : undefined,
+                } as IGWebMedia;
+            });
+        } catch (error) {
+            console.error(`[IG-Web] Erro ao buscar #${hashtag}:`, error);
+            return [];
+        }
+    }
+
+    // ── User Medias (feed do perfil) ───────────────────────────────────────
+
+    async getUserMedias(username: string, amount = 12): Promise<IGWebMedia[]> {
+        try {
+            const data = await this.apiGet('users/web_profile_info/', {
+                username,
+            });
+
+            const edges = data?.data?.user?.edge_owner_to_timeline_media?.edges || [];
+
+            return edges.slice(0, amount).map((edge: any) => {
+                const node = edge.node;
+                return {
+                    pk: parseInt(node.id, 10),
+                    id: node.id,
+                    code: node.shortcode,
+                    captionText: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+                    likeCount: node.edge_liked_by?.count || 0,
+                    commentCount: node.edge_media_to_comment?.count || 0,
+                    mediaType: node.is_video ? 2 : (node.__typename === 'GraphSidecar' ? 8 : 1),
+                    takenAt: node.taken_at_timestamp ? new Date(node.taken_at_timestamp * 1000) : undefined,
+                    imageUrl: node.display_url || '',
+                    userId: node.owner?.id ? parseInt(node.owner.id, 10) : undefined,
+                } as IGWebMedia;
+            });
+        } catch (error) {
+            console.error(`[IG-Web] Erro ao buscar medias de @${username}:`, error);
+            return [];
+        }
+    }
+
+    // ── User ID from Username ──────────────────────────────────────────────
+
+    async getUserIdFromUsername(username: string): Promise<number | null> {
+        const info = await this.getUserInfo(username);
+        return info?.pk || null;
+    }
+
     // ── Logout ─────────────────────────────────────────────────────────────
 
     async logout(): Promise<void> {

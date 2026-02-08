@@ -15,6 +15,7 @@ import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import socialRoutes from './routes/social.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import instagramBotRoutes from './routes/instagram-bot.routes.js';
 import { ensureDefaultAdmin, initUserStore } from './services/user.store.js';
 import { initTokenStore } from './services/social-token.store.js';
 import { socialQueue } from './services/social-queue.service.js';
@@ -58,6 +59,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/instagram-bot', instagramBotRoutes);
 
 // Garantir admin padrão
 ensureDefaultAdmin();
