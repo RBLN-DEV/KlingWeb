@@ -9,6 +9,8 @@
 //   4. Atualiza a publicação com o resultado (providerPostId, providerPostUrl)
 // ============================================================================
 
+import fs from 'fs';
+import path from 'path';
 import { socialQueue } from './social-queue.service.js';
 import { getTokenById, markTokenUsed } from './social-token.store.js';
 import { getPublicationById, updatePublication } from '../routes/social-publish.routes.js';
@@ -27,6 +29,54 @@ import {
 import { decrypt } from './crypto.service.js';
 import { InstagramBotService } from './instagram-bot/instagram-bot.service.js';
 import type { QueueJob, SocialToken } from '../types/social.types.js';
+
+/**
+ * Resolve mediaUrl: converte caminhos locais (/temp/xxx) em URL completa
+ * para que o fetch funcione. Paths locais são servidos pelo Express em /temp.
+ */
+function resolveMediaUrl(mediaUrl: string): string {
+    if (!mediaUrl) return mediaUrl;
+    // Já é uma URL completa
+    if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+        return mediaUrl;
+    }
+    // Data URI — retorna como está
+    if (mediaUrl.startsWith('data:')) {
+        return mediaUrl;
+    }
+    // Caminho local (/temp/xxx) — construir URL completa para o próprio servidor
+    const port = process.env.PORT || 3001;
+    const selfUrl = `http://localhost:${port}${mediaUrl.startsWith('/') ? mediaUrl : '/' + mediaUrl}`;
+    console.log(`[Social] Resolvendo path local: ${mediaUrl} → ${selfUrl}`);
+    return selfUrl;
+}
+
+/**
+ * Tenta ler mídia direto do disco se for path local /temp/xxx.
+ * Retorna o Buffer ou null se não encontrar.
+ */
+function readLocalMedia(mediaUrl: string): Buffer | null {
+    if (!mediaUrl || mediaUrl.startsWith('http') || mediaUrl.startsWith('data:')) {
+        return null;
+    }
+    const filename = path.basename(mediaUrl);
+    const possibleDirs = [
+        '/home/temp_uploads',
+        '/app/temp_uploads',
+        path.join(process.cwd(), 'temp_uploads'),
+    ];
+    for (const dir of possibleDirs) {
+        const fullPath = path.join(dir, filename);
+        try {
+            if (fs.existsSync(fullPath)) {
+                const buffer = fs.readFileSync(fullPath);
+                console.log(`[Social] Mídia lida do disco: ${fullPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
+                return buffer;
+            }
+        } catch { /* ignore */ }
+    }
+    return null;
+}
 
 // ── Register Handler ───────────────────────────────────────────────────────
 
@@ -86,10 +136,13 @@ async function handlePublishJob(job: QueueJob): Promise<void> {
         let providerPostId: string | undefined;
         let providerPostUrl: string | undefined;
 
+        // Resolver paths locais (/temp/xxx) para URLs completas
+        const resolvedMediaUrl = resolveMediaUrl(publication.mediaUrl);
+
         if (job.provider === 'instagram') {
             const result = await publishToInstagram(
                 token,
-                publication.mediaUrl,
+                resolvedMediaUrl,
                 publication.mediaType,
                 fullCaption
             );
@@ -98,7 +151,7 @@ async function handlePublishJob(job: QueueJob): Promise<void> {
         } else if (job.provider === 'twitter') {
             const result = await publishToTwitter(
                 token,
-                publication.mediaUrl,
+                resolvedMediaUrl,
                 publication.mediaType,
                 fullCaption
             );

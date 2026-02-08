@@ -302,19 +302,58 @@ export class InstagramBotService {
 
         const { mediaUrl, caption, destination, mediaType: explicitType } = options;
 
-        console.log(`[InstagramBot] 📤 Publicando ${destination} a partir de URL...`);
+        console.log(`[InstagramBot] 📤 Publicando ${destination} a partir de URL: ${mediaUrl}`);
 
-        // 1. Download da mídia
-        let buffer: Buffer;
-        let contentType: string;
+        // 1. Download da mídia (com suporte a paths locais /temp/xxx)
+        let buffer: Buffer = Buffer.alloc(0);
+        let contentType: string = '';
         try {
-            const response = await fetch(mediaUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Tentar ler direto do disco se for path local
+            if (mediaUrl && !mediaUrl.startsWith('http') && !mediaUrl.startsWith('data:')) {
+                const fs = await import('fs');
+                const path = await import('path');
+                const filename = path.default.basename(mediaUrl);
+                const possibleDirs = [
+                    '/home/temp_uploads',
+                    '/app/temp_uploads',
+                    path.default.join(process.cwd(), 'temp_uploads'),
+                ];
+                let found = false;
+                for (const dir of possibleDirs) {
+                    const fullPath = path.default.join(dir, filename);
+                    try {
+                        if (fs.default.existsSync(fullPath)) {
+                            buffer = fs.default.readFileSync(fullPath);
+                            // Detectar content-type pelo magic bytes
+                            if (buffer[0] === 0xFF && buffer[1] === 0xD8) contentType = 'image/jpeg';
+                            else if (buffer[0] === 0x89 && buffer[1] === 0x50) contentType = 'image/png';
+                            else if (buffer[0] === 0x47 && buffer[1] === 0x49) contentType = 'image/gif';
+                            else contentType = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                            console.log(`[InstagramBot] Mídia lida do disco: ${fullPath} (${(buffer!.length / 1024).toFixed(0)}KB, ${contentType})`);
+                            found = true;
+                            break;
+                        }
+                    } catch { /* ignore */ }
+                }
+                if (!found) {
+                    // Fallback: tentar via self-hosted URL
+                    const port = process.env.PORT || 3001;
+                    const selfUrl = `http://localhost:${port}${mediaUrl.startsWith('/') ? mediaUrl : '/' + mediaUrl}`;
+                    console.log(`[InstagramBot] Path local não encontrado no disco, tentando URL: ${selfUrl}`);
+                    const response = await fetch(selfUrl);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    contentType = response.headers.get('content-type') || '';
+                    buffer = Buffer.from(await response.arrayBuffer());
+                }
+            } else {
+                const response = await fetch(mediaUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                contentType = response.headers.get('content-type') || '';
+                buffer = Buffer.from(await response.arrayBuffer());
             }
-            contentType = response.headers.get('content-type') || '';
-            buffer = Buffer.from(await response.arrayBuffer());
-            console.log(`[InstagramBot] Download OK: ${(buffer.length / 1024 / 1024).toFixed(1)}MB, type=${contentType}`);
+            console.log(`[InstagramBot] Download OK: ${(buffer!.length / 1024 / 1024).toFixed(1)}MB, type=${contentType}`);
         } catch (err: any) {
             return { success: false, error: `Falha ao baixar mídia: ${err.message}` };
         }
