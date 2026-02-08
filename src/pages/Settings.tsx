@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   User, 
@@ -33,7 +33,7 @@ const TABS = [
 ];
 
 export function Settings() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, token: authToken } = useAuth();
   const { addToast } = useToast();
   
   const [activeTab, setActiveTab] = useState('profile');
@@ -77,16 +77,44 @@ export function Settings() {
   });
 
   // Network/Proxy state
-  const [proxyConfig, setProxyConfig] = useState(() => {
-    try {
-      const saved = localStorage.getItem('klingai_proxy_config');
-      return saved ? JSON.parse(saved) : { proxyUrl: '', enabled: false };
-    } catch {
-      return { proxyUrl: '', enabled: false };
-    }
-  });
+  const [proxyConfig, setProxyConfig] = useState({ proxyUrl: '', enabled: false });
   const [proxyTestResult, setProxyTestResult] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [proxyTestMessage, setProxyTestMessage] = useState('');
+  const [proxyLoaded, setProxyLoaded] = useState(false);
+
+  // Carregar config do proxy do backend ao montar
+  const loadProxyFromBackend = useCallback(async () => {
+    try {
+      const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
+      const res = await fetch(`${API_BASE}/api/settings/proxy`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setProxyConfig({
+            proxyUrl: json.data.rawProxyUrl || json.data.proxyUrl || '',
+            enabled: json.data.enabled || false,
+          });
+        }
+      }
+    } catch {
+      // fallback: tentar carregar do localStorage
+      try {
+        const saved = localStorage.getItem('klingai_proxy_config');
+        if (saved) setProxyConfig(JSON.parse(saved));
+      } catch { /* ignore */ }
+    } finally {
+      setProxyLoaded(true);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    loadProxyFromBackend();
+  }, [loadProxyFromBackend]);
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -150,22 +178,43 @@ export function Settings() {
   const handleSaveProxy = async () => {
     setIsSaving(true);
     try {
-      localStorage.setItem('klingai_proxy_config', JSON.stringify(proxyConfig));
-      
-      // Se tem proxy URL, salvar no backend também
-      if (proxyConfig.proxyUrl && proxyConfig.enabled) {
-        const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
-        await fetch(`${API_BASE}/api/settings/proxy`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ proxyUrl: proxyConfig.proxyUrl }),
-        }).catch(() => {/* silently fail if backend endpoint doesn't exist yet */});
+      // Salvar no backend (persistência em disco)
+      const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
+      const res = await fetch(`${API_BASE}/api/settings/proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          enabled: proxyConfig.enabled,
+          proxyUrl: proxyConfig.proxyUrl,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        // Salvar no localStorage como backup
+        localStorage.setItem('klingai_proxy_config', JSON.stringify(proxyConfig));
+        addToast({
+          type: 'success',
+          title: 'Configuração de rede salva',
+          message: json.message || 'As configurações de proxy foram atualizadas',
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Erro ao salvar proxy',
+          message: json.error || 'Falha ao salvar configuração',
+        });
       }
-      
+    } catch (err) {
+      // Fallback: salvar no localStorage se backend falhar
+      localStorage.setItem('klingai_proxy_config', JSON.stringify(proxyConfig));
       addToast({
-        type: 'success',
-        title: 'Configuração de rede salva',
-        message: 'As configurações de proxy foram atualizadas',
+        type: 'warning',
+        title: 'Salvo localmente',
+        message: 'Backend indisponível. Configuração salva apenas no navegador.',
       });
     } finally {
       setIsSaving(false);
@@ -186,7 +235,10 @@ export function Settings() {
       const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
       const response = await fetch(`${API_BASE}/api/settings/proxy/test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ proxyUrl: proxyConfig.proxyUrl }),
       });
 

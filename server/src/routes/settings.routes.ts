@@ -5,6 +5,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import asyncHandler from 'express-async-handler';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
 import { JWT_SECRET } from './auth.routes.js';
 import { getUserById } from '../services/user.store.js';
 
@@ -43,14 +45,53 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 
 router.use(requireAuth);
 
-// ── Proxy Config (em memória — persiste enquanto servidor roda) ─────────
+// ── Persistência de Proxy em disco ──────────────────────────────────────────
 
-let serverProxyConfig: {
+const DATA_DIR = path.join(process.cwd(), 'data');
+const PROXY_CONFIG_FILE = path.join(DATA_DIR, 'proxy-config.json');
+
+interface ProxyConfig {
     enabled: boolean;
     proxyUrl: string;
     updatedAt: string;
     updatedBy: string;
-} | null = null;
+}
+
+function loadProxyConfig(): ProxyConfig | null {
+    try {
+        if (!fs.existsSync(PROXY_CONFIG_FILE)) return null;
+        const raw = fs.readFileSync(PROXY_CONFIG_FILE, 'utf-8');
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+function saveProxyConfig(config: ProxyConfig): void {
+    try {
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
+        const tmp = PROXY_CONFIG_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(config, null, 2), 'utf-8');
+        fs.renameSync(tmp, PROXY_CONFIG_FILE);
+    } catch (err) {
+        console.error('[Settings] Erro ao salvar proxy config:', err);
+    }
+}
+
+// Carregar config do disco e aplicar env vars no startup
+function applyProxyFromDisk(): void {
+    const config = loadProxyConfig();
+    if (config?.enabled && config.proxyUrl) {
+        process.env.INSTAGRAM_PROXY = config.proxyUrl;
+        process.env.HTTPS_PROXY = config.proxyUrl;
+        console.log(`[Settings] Proxy carregado do disco: ${config.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}`);
+    }
+}
+
+// Aplicar ao iniciar
+applyProxyFromDisk();
 
 /**
  * POST /api/settings/proxy
@@ -88,19 +129,20 @@ router.post('/proxy', asyncHandler(async (req: Request, res: Response) => {
         }
     }
 
-    // Salvar configuração
-    serverProxyConfig = {
+    // Salvar configuração em disco
+    const config: ProxyConfig = {
         enabled: !!enabled,
-        proxyUrl: enabled ? proxyUrl : '',
+        proxyUrl: proxyUrl || '',
         updatedAt: new Date().toISOString(),
         updatedBy: userId,
     };
+    saveProxyConfig(config);
 
     // Atualizar variáveis de ambiente para uso imediato
-    if (enabled && proxyUrl) {
-        process.env.INSTAGRAM_PROXY = proxyUrl;
-        process.env.HTTPS_PROXY = proxyUrl;
-        console.log(`[Settings] Proxy configurado: ${proxyUrl.substring(0, 40)}...`);
+    if (config.enabled && config.proxyUrl) {
+        process.env.INSTAGRAM_PROXY = config.proxyUrl;
+        process.env.HTTPS_PROXY = config.proxyUrl;
+        console.log(`[Settings] Proxy configurado: ${config.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}`);
     } else {
         delete process.env.INSTAGRAM_PROXY;
         delete process.env.HTTPS_PROXY;
@@ -109,10 +151,11 @@ router.post('/proxy', asyncHandler(async (req: Request, res: Response) => {
 
     res.json({
         success: true,
-        message: enabled ? 'Proxy configurado com sucesso' : 'Proxy desabilitado',
+        message: config.enabled ? 'Proxy configurado com sucesso' : 'Proxy desabilitado',
         data: {
-            enabled: serverProxyConfig.enabled,
-            updatedAt: serverProxyConfig.updatedAt,
+            enabled: config.enabled,
+            proxyUrl: config.proxyUrl ? config.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@') : '',
+            updatedAt: config.updatedAt,
         },
     });
 }));
@@ -122,17 +165,19 @@ router.post('/proxy', asyncHandler(async (req: Request, res: Response) => {
  * Retorna configuração atual do proxy
  */
 router.get('/proxy', asyncHandler(async (_req: Request, res: Response) => {
+    const config = loadProxyConfig();
     const hasEnvProxy = !!(process.env.INSTAGRAM_PROXY || process.env.HTTPS_PROXY);
 
     res.json({
         success: true,
         data: {
-            enabled: serverProxyConfig?.enabled || hasEnvProxy,
-            proxyUrl: serverProxyConfig?.proxyUrl
-                ? serverProxyConfig.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')  // mascarar credenciais
+            enabled: config?.enabled || hasEnvProxy,
+            proxyUrl: config?.proxyUrl
+                ? config.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')  // mascarar credenciais
                 : (hasEnvProxy ? '(configurado via variável de ambiente)' : ''),
-            updatedAt: serverProxyConfig?.updatedAt || null,
-            source: serverProxyConfig ? 'ui' : (hasEnvProxy ? 'env' : 'none'),
+            rawProxyUrl: config?.proxyUrl || '',  // URL real para preencher o input
+            updatedAt: config?.updatedAt || null,
+            source: config ? 'ui' : (hasEnvProxy ? 'env' : 'none'),
         },
     });
 }));
