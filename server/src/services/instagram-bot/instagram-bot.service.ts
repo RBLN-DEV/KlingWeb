@@ -384,6 +384,13 @@ export class InstagramBotService {
         };
     }
 
+    /**
+     * Retorna dados de sessão (cookies) para persistência
+     */
+    getSessionData() {
+        return this.api.getSessionData();
+    }
+
     updateConfig(updates: Partial<BotConfig>): void {
         this.config = { ...this.config, ...updates };
         console.log('[InstagramBot] Config atualizada');

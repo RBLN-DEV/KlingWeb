@@ -10,7 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import { JWT_SECRET } from './auth.routes.js';
 import { getUserById } from '../services/user.store.js';
-import { getUserTokensFull } from '../services/social-token.store.js';
+import { getUserTokensFull, saveSocialToken } from '../services/social-token.store.js';
+import { encrypt } from '../services/crypto.service.js';
 import { InstagramBotService } from '../services/instagram-bot/instagram-bot.service.js';
 import type { GrowthSessionType } from '../services/instagram-bot/types.js';
 
@@ -101,13 +102,43 @@ router.post('/login-direct', asyncHandler(async (req: Request, res: Response) =>
     }
 
     const bot = getBot(req);
+    const userId = (req as any).userId as string;
 
     try {
         await bot.loginDirect(username, password);
+        const status = bot.getStatus();
+
+        // ── Persistir como SocialToken para auto-login futuro ──────────
+        try {
+            // Obter cookies da sessão ativa para restauração futura
+            const sessionData = bot.getSessionData();
+            const igCookies = sessionData?.cookies
+                ? encrypt(JSON.stringify(sessionData.cookies))
+                : undefined;
+
+            saveSocialToken(userId, 'instagram', {
+                providerUserId: status.userId || username,
+                providerUsername: username,
+                accessToken: 'direct-login',      // Não há OAuth token
+                tokenExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 ano
+                scopes: ['unofficial'],
+                metadata: {
+                    authMode: 'unofficial',
+                    igPassword: encrypt(password),
+                    igCookies,
+                },
+            });
+
+            console.log(`[InstagramBot] Token persistido para @${username} (user ${userId})`);
+        } catch (saveErr: any) {
+            console.warn(`[InstagramBot] Login OK mas falha ao persistir token: ${saveErr.message}`);
+            // Login ainda foi bem-sucedido, não falhar por causa disso
+        }
+
         res.json({
             success: true,
-            message: `Bot autenticado como @${username}`,
-            data: bot.getStatus(),
+            message: `Bot autenticado como @${username} (credenciais salvas para auto-login)`,
+            data: status,
         });
     } catch (error: any) {
         res.status(400).json({ success: false, error: error.message });
