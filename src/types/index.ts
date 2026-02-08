@@ -44,6 +44,7 @@ export interface ImageGeneration {
   id: string;
   prompt: string;
   imageUrl?: string;
+  imageBase64?: string;
   status: 'processing' | 'completed' | 'failed' | 'pending';
   createdAt: Date;
   model: string;

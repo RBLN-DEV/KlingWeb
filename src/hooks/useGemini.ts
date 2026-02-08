@@ -34,6 +34,7 @@ export function useGemini() {
     id: data.id,
     prompt: data.prompt,
     imageUrl: data.imageUrl,
+    imageBase64: data.imageBase64,
     status: data.status,
     createdAt: new Date(data.createdAt),
     model: data.model,

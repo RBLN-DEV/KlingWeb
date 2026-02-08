@@ -113,7 +113,10 @@ export function useKling() {
       let finalImageUrl = options.imageUrl;
       let finalImageBase64 = options.imageBase64;
 
-      if (options.imageUrl.startsWith('data:')) {
+      // Se já temos imageBase64 puro dos dados da galeria, usar direto
+      if (finalImageBase64) {
+        finalImageUrl = '';
+      } else if (options.imageUrl.startsWith('data:')) {
         finalImageBase64 = options.imageUrl.split(',')[1];
         finalImageUrl = '';
       }

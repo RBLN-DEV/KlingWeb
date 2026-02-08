@@ -43,6 +43,7 @@ export function VideoGeneration() {
   const state = location.state as LocationState;
   const [currentStep, setCurrentStep] = useState(state?.imageUrl ? 2 : 1);
   const [selectedImage, setSelectedImage] = useState<string | null>(state?.imageUrl || null);
+  const [selectedImageBase64, setSelectedImageBase64] = useState<string | null>(null);
   const [referenceVideo, setReferenceVideo] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -56,7 +57,7 @@ export function VideoGeneration() {
   const [generatedVideo, setGeneratedVideo] = useState<VideoGeneration | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showGallery, setShowGallery] = useState(false);
-  const [storedImages, setStoredImages] = useState<string[]>([]);
+  const [storedImages, setStoredImages] = useState<Array<{ imageUrl: string; imageBase64?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +77,7 @@ export function VideoGeneration() {
       reader.onload = (e) => {
         const result = e.target?.result as string;
         setSelectedImage(result);
+        setSelectedImageBase64(null); // Upload gera data: URI, não precisa de base64 separado
         addToast({
           type: 'success',
           title: 'Imagem carregada',
@@ -88,7 +90,10 @@ export function VideoGeneration() {
 
   useEffect(() => {
     const images = getStoredImages();
-    setStoredImages(images.map(img => img.imageUrl || '').filter(Boolean));
+    setStoredImages(images.map(img => ({
+      imageUrl: img.imageUrl || '',
+      imageBase64: img.imageBase64,
+    })).filter(img => img.imageUrl));
   }, [getStoredImages]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,6 +154,7 @@ export function VideoGeneration() {
       setGenerationError(null);
       const result = await generateVideo({
         imageUrl: selectedImage,
+        imageBase64: selectedImageBase64 || undefined,
         referenceVideo: referenceVideo || undefined,
         parameters,
         title: title.trim(),
@@ -249,15 +255,16 @@ export function VideoGeneration() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => {
-                    setSelectedImage(img);
+                    setSelectedImage(img.imageUrl);
+                    setSelectedImageBase64(img.imageBase64 || null);
                     setShowGallery(false);
                   }}
                   className={cn(
                     'aspect-square rounded-lg overflow-hidden border-2 transition-colors',
-                    selectedImage === img ? 'border-[#7e57c2]' : 'border-transparent'
+                    selectedImage === img.imageUrl ? 'border-[#7e57c2]' : 'border-transparent'
                   )}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
                 </motion.button>
               ))}
             </div>
@@ -281,7 +288,7 @@ export function VideoGeneration() {
               className="max-h-[300px] rounded-lg"
             />
             <button
-              onClick={() => setSelectedImage(null)}
+              onClick={() => { setSelectedImage(null); setSelectedImageBase64(null); }}
               className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
             >
               <X className="w-4 h-4 text-white" />
@@ -550,6 +557,7 @@ export function VideoGeneration() {
                 setGeneratedVideo(null);
                 setCurrentStep(1);
                 setSelectedImage(null);
+                setSelectedImageBase64(null);
                 setTitle('');
               }}
               className="bg-[#7e57c2] hover:bg-[#6a42b0] text-white"

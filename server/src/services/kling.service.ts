@@ -183,6 +183,37 @@ export class KlingService {
             }
             base64 = parts[1];
             console.log(`[KlingService] Data URI → Base64 puro (${base64.length} chars)`);
+        } else if (content.startsWith('/') || content.includes('/temp/')) {
+            // Caminho de arquivo local — tentar ler do disco
+            console.log(`[KlingService] Detectado caminho de arquivo local: ${content}`);
+            const fs = await import('fs');
+            const path = await import('path');
+            const filename = path.default.basename(content);
+            const possibleDirs = [
+                '/home/temp_uploads',
+                '/app/temp_uploads',
+                path.default.join(process.cwd(), 'temp_uploads'),
+            ];
+            let fileFound = false;
+            for (const dir of possibleDirs) {
+                const fullPath = path.default.join(dir, filename);
+                try {
+                    if (fs.default.existsSync(fullPath)) {
+                        const buffer = fs.default.readFileSync(fullPath);
+                        base64 = buffer.toString('base64');
+                        console.log(`[KlingService] Arquivo lido: ${fullPath} → ${base64.length} chars Base64`);
+                        fileFound = true;
+                        break;
+                    }
+                } catch (e: any) {
+                    console.warn(`[KlingService] Erro ao ler ${fullPath}: ${e.message}`);
+                }
+            }
+            if (!fileFound!) {
+                throw new Error(`Arquivo de imagem não encontrado no servidor: ${content}`);
+            }
+            // base64 já atribuído no loop
+            base64 = base64!;
         } else {
             // Já é Base64 puro — limpar possíveis whitespaces/newlines
             base64 = content;
@@ -301,7 +332,7 @@ export class KlingService {
         const genConfig = { ...DEFAULT_CONFIG, ...config };
 
         console.log('[KlingService] Iniciando Motion Control...');
-        console.log(`[KlingService] imageInput tipo: ${imageInput.startsWith('http') ? 'URL' : imageInput.startsWith('data:') ? 'DataURI' : 'Base64'} (${imageInput.substring(0, 80)}...)`);
+        console.log(`[KlingService] imageInput tipo: ${imageInput.startsWith('http') ? 'URL' : imageInput.startsWith('data:') ? 'DataURI' : imageInput.startsWith('/') ? 'CaminhoLocal' : 'Base64'} (${imageInput.substring(0, 80)}...)`);
         console.log(`[KlingService] videoUrl: ${videoUrl.substring(0, 120)}...`);
 
         // Video DEVE ser uma URL pública

@@ -177,7 +177,46 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
 
     // Iniciar geração em background
     const klingService = getKlingService();
-    const imageInput = imageBase64 || imageUrl;
+    let imageInput = imageBase64 || imageUrl;
+
+    // Se imageInput é um caminho local (/temp/...), ler o arquivo e converter para base64
+    if (imageInput && !imageInput.startsWith('data:') && !imageInput.startsWith('http') && !imageInput.startsWith('https')) {
+        try {
+            // Resolver caminho: /temp/filename → TEMP_UPLOADS_DIR/../filename
+            // O Express serve /temp -> getTempUploadsDir(), que em prod é /home/temp_uploads
+            const filename = path.basename(imageInput);
+            // Tentar múltiplos diretórios possíveis (prod e dev)
+            const possibleDirs = [
+                '/home/temp_uploads',
+                '/app/temp_uploads',
+                path.join(process.cwd(), 'temp_uploads'),
+            ];
+            let resolved = false;
+            for (const dir of possibleDirs) {
+                const fullPath = path.join(dir, filename);
+                if (fs.existsSync(fullPath)) {
+                    const buffer = fs.readFileSync(fullPath);
+                    imageInput = buffer.toString('base64');
+                    console.log(`[VideoRoute] Arquivo local ${imageInput.substring(0, 40)}... → Base64 (${imageInput.length} chars) de ${fullPath}`);
+                    resolved = true;
+                    break;
+                }
+            }
+            if (!resolved) {
+                console.warn(`[VideoRoute] Arquivo local não encontrado: ${imageInput} — tentando como URL completa`);
+                // Tentar construir URL completa para o próprio servidor
+                const port = process.env.PORT || 3001;
+                const selfUrl = `http://localhost:${port}${imageInput.startsWith('/') ? imageInput : '/' + imageInput}`;
+                console.log(`[VideoRoute] Tentando URL self-hosted: ${selfUrl}`);
+                imageInput = selfUrl;
+            }
+        } catch (err: any) {
+            console.error(`[VideoRoute] Erro ao resolver arquivo local: ${err.message}`);
+            // Manter o valor original e deixar o KlingService tentar
+        }
+    }
+
+    console.log(`[VideoRoute] imageInput final tipo: ${imageInput?.startsWith('http') ? 'URL' : imageInput?.startsWith('data:') ? 'DataURI' : `Base64 (${imageInput?.length || 0} chars)`}`);
 
     // Processar em background
     (async () => {
