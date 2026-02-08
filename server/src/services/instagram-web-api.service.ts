@@ -922,6 +922,92 @@ export class InstagramWebAPI {
         }
     }
 
+    // ── Publicar: Vídeo nos Stories ────────────────────────────────────────
+
+    async publishStoryVideo(
+        videoBuffer: Buffer,
+        thumbnailBuffer?: Buffer,
+        videoInfo: { durationMs: number; width: number; height: number } = {
+            durationMs: 15000, width: 1080, height: 1920,
+        },
+    ): Promise<IGWebUploadResult> {
+        if (!this.isAuthenticated) {
+            return { success: false, error: 'Não autenticado' };
+        }
+
+        if (videoInfo.durationMs > 60000) {
+            console.warn('[IG-Web] Stories permitem no máximo 60 segundos de vídeo');
+        }
+
+        try {
+            const uploadId = String(Date.now());
+
+            console.log(`[IG-Web] 📱 Enviando story vídeo: ${videoInfo.durationMs / 1000}s`);
+
+            // 1. Upload do vídeo (com flag is_story)
+            if (!await this.uploadVideoBinary(videoBuffer, uploadId, videoInfo, { isStory: true })) {
+                return { success: false, error: 'Falha no upload do vídeo' };
+            }
+
+            // 2. Upload da thumbnail
+            if (thumbnailBuffer) {
+                await this.uploadPhotoBinary(thumbnailBuffer, uploadId);
+            }
+
+            await this.delay(3000, 6000);
+            this.refreshCsrf();
+
+            // 3. Configurar story vídeo
+            const now = Math.floor(Date.now() / 1000);
+            const configureData: Record<string, string> = {
+                upload_id: uploadId,
+                source_type: '3',
+                configure_mode: '1',
+                timezone_offset: '-10800',
+                client_shared_at: String(now - 7),
+                client_timestamp: String(now),
+                capture_type: 'normal',
+                creation_surface: 'camera',
+                camera_entry_point: '25',
+                original_media_type: 'video',
+                has_original_sound: '1',
+                camera_session_id: crypto.randomUUID(),
+                composition_id: crypto.randomUUID(),
+                filter_type: '0',
+                video_result: '',
+                camera_position: 'back',
+                length: String(videoInfo.durationMs / 1000),
+                clips: JSON.stringify([{
+                    length: videoInfo.durationMs / 1000,
+                    source_type: '3',
+                    camera_position: 'back',
+                }]),
+                extra: JSON.stringify({
+                    source_width: videoInfo.width,
+                    source_height: videoInfo.height,
+                }),
+                _uid: this.userId || '',
+                _uuid: crypto.randomUUID(),
+            };
+
+            const result = await this.apiPost('media/configure_to_story/?video=1', configureData);
+
+            if (result?.status === 'ok') {
+                const media = result.media || {};
+                console.log('[IG-Web] 📱 Vídeo publicado nos Stories!');
+                return {
+                    success: true,
+                    mediaId: media.id || media.pk?.toString(),
+                };
+            }
+
+            return { success: false, error: 'Falha ao configurar story vídeo' };
+        } catch (error: any) {
+            console.error('[IG-Web] Erro no story (vídeo):', error);
+            return { success: false, error: error.message || 'Erro no upload' };
+        }
+    }
+
     // ── Interações sociais ─────────────────────────────────────────────────
 
     async likeMedia(mediaId: string): Promise<boolean> {

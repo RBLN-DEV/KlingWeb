@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Download, Trash2, MoreVertical, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Play, Download, Trash2, MoreVertical, Clock, CheckCircle, XCircle, Loader2, Instagram } from 'lucide-react';
 import type { VideoGeneration } from '@/types';
 import { cn, formatDate, formatDuration } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -15,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InstagramPublishModal } from '@/components/social/InstagramPublishModal';
 
 interface VideoCardProps {
   video: VideoGeneration;
@@ -32,6 +34,7 @@ const statusConfig = {
 export function VideoCard({ video, onDelete, delay = 0 }: VideoCardProps) {
   // Video playback state can be added here if needed
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const StatusIcon = statusConfig[video.status].icon;
 
   const handleDelete = () => {
@@ -125,10 +128,17 @@ export function VideoCard({ video, onDelete, delay = 0 }: VideoCardProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-[#2a2a2a] border-[#444444]">
                 {video.status === 'completed' && video.videoUrl && (
-                  <DropdownMenuItem onClick={handleDownload} className="text-white hover:bg-[#444444]">
-                    <Download className="w-4 h-4 mr-2" />
-                    Baixar
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onClick={() => setShowPublishModal(true)} className="text-white hover:bg-[#444444]">
+                      <Instagram className="w-4 h-4 mr-2 text-pink-400" />
+                      Publicar no Instagram
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-[#444444]" />
+                    <DropdownMenuItem onClick={handleDownload} className="text-white hover:bg-[#444444]">
+                      <Download className="w-4 h-4 mr-2" />
+                      Baixar
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuItem onClick={handleDelete} className="text-red-400 hover:bg-red-500/20">
                   <Trash2 className="w-4 h-4 mr-2" />
@@ -158,6 +168,18 @@ export function VideoCard({ video, onDelete, delay = 0 }: VideoCardProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Instagram Publish Modal */}
+      {video.videoUrl && (
+        <InstagramPublishModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          mediaUrl={video.videoUrl}
+          mediaType="video"
+          defaultCaption={video.title || ''}
+          thumbnailUrl={video.thumbnailUrl}
+        />
+      )}
     </>
   );
 }

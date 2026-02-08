@@ -14,6 +14,7 @@ import {
   Sparkles,
   Palette,
   Upload,
+  Instagram,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useGemini } from '@/hooks/useGemini';
@@ -28,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn, formatDate } from '@/lib/utils';
+import { InstagramPublishModal } from '@/components/social/InstagramPublishModal';
 import type { ImageGeneration } from '@/types';
 
 type ViewMode = 'grid' | 'list';
@@ -48,6 +50,7 @@ export function ImageGallery() {
   const [previewImage, setPreviewImage] = useState<ImageGeneration | null>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [publishImage, setPublishImage] = useState<ImageGeneration | null>(null);
 
   const handleUploadImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -304,6 +307,7 @@ export function ImageGallery() {
                   onDelete={handleDelete}
                   onDownload={handleDownload}
                   onPreview={setPreviewImage}
+                  onPublish={setPublishImage}
                   delay={index * 0.05}
                 />
               ))}
@@ -317,6 +321,7 @@ export function ImageGallery() {
                   onDelete={handleDelete}
                   onDownload={handleDownload}
                   onPreview={setPreviewImage}
+                  onPublish={setPublishImage}
                   delay={index * 0.05}
                 />
               ))}
@@ -443,6 +448,18 @@ export function ImageGallery() {
                       <Download className="w-4 h-4 mr-2" />
                       Baixar
                     </Button>
+                    {previewImage.imageUrl && (
+                      <Button
+                        onClick={() => {
+                          setPublishImage(previewImage);
+                          setPreviewImage(null);
+                        }}
+                        className="bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90 text-white"
+                        title="Publicar no Instagram"
+                      >
+                        <Instagram className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button
                       onClick={() => {
                         handleDelete(previewImage.id);
@@ -460,6 +477,17 @@ export function ImageGallery() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Instagram Publish Modal */}
+      {publishImage && publishImage.imageUrl && (
+        <InstagramPublishModal
+          isOpen={!!publishImage}
+          onClose={() => setPublishImage(null)}
+          mediaUrl={publishImage.imageUrl}
+          mediaType="image"
+          defaultCaption={publishImage.prompt || ''}
+        />
+      )}
     </div>
   );
 }
@@ -470,12 +498,14 @@ function ImageGridCard({
   onDelete,
   onDownload,
   onPreview,
+  onPublish,
   delay = 0,
 }: {
   image: ImageGeneration;
   onDelete: (id: string) => void;
   onDownload: (image: ImageGeneration) => void;
   onPreview: (image: ImageGeneration) => void;
+  onPublish: (image: ImageGeneration) => void;
   delay?: number;
 }) {
   return (
@@ -514,6 +544,15 @@ function ImageGridCard({
               <Eye className="w-4 h-4 text-white" />
             </button>
             <div className="flex gap-1">
+              {image.imageUrl && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onPublish(image); }}
+                  className="p-2 bg-gradient-to-r from-[#f09433]/60 to-[#bc1888]/60 hover:from-[#f09433]/80 hover:to-[#bc1888]/80 rounded-lg backdrop-blur-sm transition-colors"
+                  title="Publicar no Instagram"
+                >
+                  <Instagram className="w-4 h-4 text-white" />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onDownload(image); }}
                 className="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
@@ -555,12 +594,14 @@ function ImageListItem({
   onDelete,
   onDownload,
   onPreview,
+  onPublish,
   delay = 0,
 }: {
   image: ImageGeneration;
   onDelete: (id: string) => void;
   onDownload: (image: ImageGeneration) => void;
   onPreview: (image: ImageGeneration) => void;
+  onPublish: (image: ImageGeneration) => void;
   delay?: number;
 }) {
   return (
@@ -612,13 +653,22 @@ function ImageListItem({
           <Eye className="w-4 h-4 text-[#b0b0b0]" />
         </button>
         {image.imageUrl && (
-          <button
-            onClick={() => onDownload(image)}
-            className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
-            title="Baixar"
-          >
-            <Download className="w-4 h-4 text-[#b0b0b0]" />
-          </button>
+          <>
+            <button
+              onClick={() => onPublish(image)}
+              className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
+              title="Publicar no Instagram"
+            >
+              <Instagram className="w-4 h-4 text-pink-400" />
+            </button>
+            <button
+              onClick={() => onDownload(image)}
+              className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
+              title="Baixar"
+            >
+              <Download className="w-4 h-4 text-[#b0b0b0]" />
+            </button>
+          </>
         )}
         <button
           onClick={() => onDelete(image.id)}

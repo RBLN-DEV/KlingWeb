@@ -252,9 +252,110 @@ export class InstagramBotService {
         return this.api.publishStoryPhoto(imageBuffer);
     }
 
+    async uploadStoryVideo(videoBuffer: Buffer, coverBuffer?: Buffer) {
+        this.ensureLoggedIn();
+        return this.api.publishStoryVideo(videoBuffer, coverBuffer);
+    }
+
     async uploadReel(videoBuffer: Buffer, caption: string, coverBuffer?: Buffer) {
         this.ensureLoggedIn();
         return this.api.publishReel(videoBuffer, caption, coverBuffer);
+    }
+
+    // ── Publicação Integrada (a partir de URL) ─────────────────────────────
+
+    /**
+     * Publica mídia a partir de uma URL (vídeos/imagens gerados na app).
+     * Faz download, detecta tipo e publica no destino correto.
+     */
+    async publishFromUrl(options: {
+        mediaUrl: string;
+        caption: string;
+        destination: 'feed' | 'story' | 'reel';
+        mediaType?: 'image' | 'video';
+    }): Promise<{ success: boolean; postUrl?: string; mediaId?: string; error?: string }> {
+        this.ensureLoggedIn();
+
+        const { mediaUrl, caption, destination, mediaType: explicitType } = options;
+
+        console.log(`[InstagramBot] 📤 Publicando ${destination} a partir de URL...`);
+
+        // 1. Download da mídia
+        let buffer: Buffer;
+        let contentType: string;
+        try {
+            const response = await fetch(mediaUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            contentType = response.headers.get('content-type') || '';
+            buffer = Buffer.from(await response.arrayBuffer());
+            console.log(`[InstagramBot] Download OK: ${(buffer.length / 1024 / 1024).toFixed(1)}MB, type=${contentType}`);
+        } catch (err: any) {
+            return { success: false, error: `Falha ao baixar mídia: ${err.message}` };
+        }
+
+        // 2. Detectar tipo de mídia
+        const isVideo = explicitType === 'video'
+            || contentType.startsWith('video/')
+            || mediaUrl.match(/\.(mp4|mov|avi|webm|mkv)(\?|$)/i) !== null;
+        const isImage = !isVideo;
+
+        // 3. Publicar conforme destino
+        try {
+            if (destination === 'reel') {
+                if (!isVideo) {
+                    return { success: false, error: 'Reels requer um vídeo' };
+                }
+                const result = await this.api.publishReel(buffer, caption);
+                return {
+                    success: result.success,
+                    postUrl: result.postUrl,
+                    mediaId: result.mediaId,
+                    error: result.error,
+                };
+            }
+
+            if (destination === 'story') {
+                if (isVideo) {
+                    const result = await this.api.publishStoryVideo(buffer);
+                    return {
+                        success: result.success,
+                        mediaId: result.mediaId,
+                        error: result.error,
+                    };
+                } else {
+                    const result = await this.api.publishStoryPhoto(buffer);
+                    return {
+                        success: result.success,
+                        mediaId: result.mediaId,
+                        error: result.error,
+                    };
+                }
+            }
+
+            // feed
+            if (isVideo) {
+                const result = await this.api.publishVideo(buffer, caption);
+                return {
+                    success: result.success,
+                    postUrl: result.postUrl,
+                    mediaId: result.mediaId,
+                    error: result.error,
+                };
+            } else {
+                const result = await this.api.publishPhoto(buffer, caption);
+                return {
+                    success: result.success,
+                    postUrl: result.postUrl,
+                    mediaId: result.mediaId,
+                    error: result.error,
+                };
+            }
+        } catch (err: any) {
+            console.error(`[InstagramBot] Erro na publicação ${destination}:`, err.message);
+            return { success: false, error: err.message };
+        }
     }
 
     // ── Growth Session ─────────────────────────────────────────────────────

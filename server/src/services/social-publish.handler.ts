@@ -22,14 +22,9 @@ import {
     createTweetWithMedia,
 } from './twitter.service.js';
 import {
-    publishInstagramPhoto,
-    publishInstagramVideoUnofficial,
-    publishInstagramStoryPhoto,
-    publishInstagramStoryVideo,
-} from './instagram-unofficial.service.js';
-import {
     sendTweet,
 } from './twitter-unofficial.service.js';
+import { InstagramBotService } from './instagram-bot/instagram-bot.service.js';
 import type { QueueJob, SocialToken } from '../types/social.types.js';
 
 // ── Register Handler ───────────────────────────────────────────────────────
@@ -151,32 +146,53 @@ async function publishToInstagramUnofficial(
     mediaType: string,
     caption: string
 ): Promise<{ postId: string; postUrl: string }> {
-    // Download media to buffer
-    const response = await fetch(mediaUrl);
-    if (!response.ok) {
-        throw new Error(`Failed to download media: ${response.statusText}`);
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
+    // Usar Instagram Bot (Web API) em vez do instagram-private-api (mobile API)
+    // O Bot usa proxy residencial brasileiro e emulação de browser Chrome
+    const appUserId = token.userId || 'default';
+    const bot = InstagramBotService.getInstance(appUserId);
 
-    if (mediaType === 'image') {
-        return publishInstagramPhoto(token, buffer, caption);
-    } else if (mediaType === 'video' || mediaType === 'reel') {
-        // Para vídeo, precisamos de uma imagem de capa
-        // Usar um frame preto como placeholder (a API gera automaticamente)
-        const coverBuffer = Buffer.alloc(100);
-        try {
-            return await publishInstagramVideoUnofficial(token, buffer, coverBuffer, caption);
-        } catch (err: any) {
-            // Se o cover vazio falhar, tente sem cover (post como foto com caption)
-            console.warn(`[IG-Unofficial] Erro com vídeo, tentando como foto: ${err.message}`);
-            throw err;
+    // Garantir que o bot está logado
+    if (!bot.getStatus().isLoggedIn) {
+        console.log('[IG-WebAPI] Bot não logado, tentando login automático...');
+        const username = token.providerUsername || process.env.INSTAGRAM_USERNAME || '';
+        const password = token.metadata?.igPassword || process.env.INSTAGRAM_PASSWORD || '';
+        if (username && password) {
+            const loginOk = await bot.loginDirect(username, password);
+            if (!loginOk) {
+                throw new Error('Falha no login do bot via Web API');
+            }
+        } else {
+            // Tentar auto-login a partir dos tokens salvos
+            const autoOk = await bot.autoLogin(appUserId);
+            if (!autoOk) {
+                throw new Error('Bot não autenticado e credenciais não disponíveis');
+            }
         }
-    } else if (mediaType === 'story') {
-        const result = await publishInstagramStoryPhoto(token, buffer);
-        return { postId: result.storyId, postUrl: `https://www.instagram.com/stories/${token.providerUsername}/` };
     }
 
-    throw new Error(`Tipo de mídia não suportado: ${mediaType}`);
+    // Determinar destino correto
+    let destination: 'feed' | 'story' | 'reel' = 'feed';
+    if (mediaType === 'reel') {
+        destination = 'reel';
+    } else if (mediaType === 'story') {
+        destination = 'story';
+    }
+
+    const result = await bot.publishFromUrl({
+        mediaUrl,
+        caption,
+        destination,
+        mediaType: (mediaType === 'image') ? 'image' : 'video',
+    });
+
+    if (!result.success) {
+        throw new Error(result.error || 'Falha na publicação via Web API');
+    }
+
+    return {
+        postId: result.mediaId || 'unknown',
+        postUrl: result.postUrl || `https://www.instagram.com/${token.providerUsername}/`,
+    };
 }
 
 // ── Twitter Publishing ─────────────────────────────────────────────────────

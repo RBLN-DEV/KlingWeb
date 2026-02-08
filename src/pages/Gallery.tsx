@@ -10,7 +10,8 @@ import {
   Clock,
   Trash2,
   Download,
-  Play
+  Play,
+  Instagram
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useKling } from '@/hooks/useKling';
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn, formatDate, formatDuration } from '@/lib/utils';
+import { InstagramPublishModal } from '@/components/social/InstagramPublishModal';
 import type { VideoGeneration } from '@/types';
 
 type ViewMode = 'grid' | 'list';
@@ -259,6 +261,7 @@ function VideoListItem({
   onDelete: (id: string) => void;
   delay?: number;
 }) {
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const statusConfig = {
     pending: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/20', label: 'Pendente' },
     processing: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-500/20', label: 'Processando' },
@@ -320,13 +323,22 @@ function VideoListItem({
       {/* Actions */}
       <div className="flex items-center gap-2">
         {video.status === 'completed' && video.videoUrl && (
-          <button
-            onClick={handleDownload}
-            className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
-            title="Baixar"
-          >
-            <Download className="w-4 h-4 text-[#b0b0b0]" />
-          </button>
+          <>
+            <button
+              onClick={() => setShowPublishModal(true)}
+              className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
+              title="Publicar no Instagram"
+            >
+              <Instagram className="w-4 h-4 text-pink-400" />
+            </button>
+            <button
+              onClick={handleDownload}
+              className="p-2 hover:bg-[#444444] rounded-lg transition-colors"
+              title="Baixar"
+            >
+              <Download className="w-4 h-4 text-[#b0b0b0]" />
+            </button>
+          </>
         )}
         <button
           onClick={() => onDelete(video.id)}
@@ -336,6 +348,18 @@ function VideoListItem({
           <Trash2 className="w-4 h-4 text-red-400" />
         </button>
       </div>
+
+      {/* Instagram Publish Modal */}
+      {video.videoUrl && (
+        <InstagramPublishModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          mediaUrl={video.videoUrl}
+          mediaType="video"
+          defaultCaption={video.title || ''}
+          thumbnailUrl={video.thumbnailUrl}
+        />
+      )}
     </motion.div>
   );
 }

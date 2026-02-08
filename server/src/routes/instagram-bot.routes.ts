@@ -314,7 +314,11 @@ router.post('/upload/story', upload.single('media'), asyncHandler(async (req: Re
 
     try {
         const buffer = fs.readFileSync(file.path);
-        const result = await bot.uploadStoryPhoto(buffer);
+        const isVideo = file.mimetype?.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.originalname);
+
+        const result = isVideo
+            ? await bot.uploadStoryVideo(buffer)
+            : await bot.uploadStoryPhoto(buffer);
         fs.unlinkSync(file.path);
 
         res.json({ success: result.success, data: result });
@@ -686,6 +690,95 @@ router.get('/analytics/activity', asyncHandler(async (req: Request, res: Respons
     const bot = getBot(req);
     const activity = bot.analyticsEngine.analyzeFollowerActivity();
     res.json({ success: true, data: activity });
+}));
+
+// ════════════════════════════════════════════════════════════════════════════
+// PUBLICAÇÃO INTEGRADA (URL → Instagram)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/instagram-bot/publish
+ * Publicar mídia a partir de URL (integração com Gallery/VideoGeneration)
+ * Body: { mediaUrl, caption, destination: 'feed'|'story'|'reel', mediaType?: 'image'|'video' }
+ */
+router.post('/publish', asyncHandler(async (req: Request, res: Response) => {
+    const { mediaUrl, caption, destination, mediaType } = req.body;
+
+    if (!mediaUrl) {
+        res.status(400).json({ success: false, error: 'mediaUrl é obrigatório' });
+        return;
+    }
+    if (!destination || !['feed', 'story', 'reel'].includes(destination)) {
+        res.status(400).json({ success: false, error: 'destination deve ser feed, story ou reel' });
+        return;
+    }
+
+    const bot = getBot(req);
+
+    try {
+        const result = await bot.publishFromUrl({
+            mediaUrl,
+            caption: caption || '',
+            destination: destination as 'feed' | 'story' | 'reel',
+            mediaType: mediaType as 'image' | 'video' | undefined,
+        });
+        res.json(result);
+    } catch (error: any) {
+        console.error('[InstagramBot] Publish from URL error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+}));
+
+/**
+ * POST /api/instagram-bot/publish/batch
+ * Publicar múltiplas mídias em sequência
+ * Body: { items: [{ mediaUrl, caption, destination, mediaType }] }
+ */
+router.post('/publish/batch', asyncHandler(async (req: Request, res: Response) => {
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ success: false, error: 'items array é obrigatório' });
+        return;
+    }
+
+    if (items.length > 10) {
+        res.status(400).json({ success: false, error: 'Máximo de 10 itens por batch' });
+        return;
+    }
+
+    const bot = getBot(req);
+    const results: any[] = [];
+
+    for (const item of items) {
+        try {
+            // Delay entre publicações para evitar rate limiting
+            if (results.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, 30000)); // 30s entre posts
+            }
+
+            const result = await bot.publishFromUrl({
+                mediaUrl: item.mediaUrl,
+                caption: item.caption || '',
+                destination: item.destination || 'feed',
+                mediaType: item.mediaType,
+            });
+            results.push({ ...result, mediaUrl: item.mediaUrl });
+        } catch (error: any) {
+            results.push({ success: false, error: error.message, mediaUrl: item.mediaUrl });
+        }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    res.json({
+        success: successCount > 0,
+        data: {
+            total: items.length,
+            successful: successCount,
+            failed: items.length - successCount,
+            results,
+        },
+    });
 }));
 
 export default router;
