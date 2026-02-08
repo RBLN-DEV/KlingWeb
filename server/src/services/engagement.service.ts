@@ -29,7 +29,8 @@ import type {
 
 // ── Paths ──────────────────────────────────────────────────────────────────
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+
 const METRICS_FILE = path.join(DATA_DIR, 'engagement-metrics.json');
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
 
@@ -52,12 +53,6 @@ const MAX_POLLING_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const SCHEDULER_INTERVAL_MS = 2 * 60 * 1000;
 
 // ── Data Layer ─────────────────────────────────────────────────────────────
-
-function ensureDataDir(): void {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-}
 
 function readMetrics(): EngagementSnapshot[] {
     ensureDataDir();

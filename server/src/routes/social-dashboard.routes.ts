@@ -26,7 +26,7 @@ const router = Router();
 
 // ── Data Layer ─────────────────────────────────────────────────────────────
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+import { DATA_DIR } from '../services/data-dir.js';
 
 function readPublications(): Publication[] {
     const file = path.join(DATA_DIR, 'publications.json');

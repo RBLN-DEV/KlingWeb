@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
 
 export interface StoredUser {
     id: string;
@@ -17,18 +18,11 @@ export interface StoredUser {
 
 export type PublicUser = Omit<StoredUser, 'passwordHash'>;
 
-const DATA_DIR = path.join(process.cwd(), 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Admin padrão — criado automaticamente se nenhum admin existir
 const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@klingai.com';
 const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@2025';
-
-function ensureDataDir(): void {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-}
 
 function hashPassword(password: string): string {
     return crypto.createHash('sha256').update(password + 'klingai_salt_2025').digest('hex');
@@ -49,7 +43,7 @@ function readUsers(): StoredUser[] {
 
 function writeUsers(users: StoredUser[]): void {
     ensureDataDir();
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+    writeFileAtomic(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 function toPublicUser(user: StoredUser): PublicUser {

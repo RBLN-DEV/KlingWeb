@@ -87,18 +87,82 @@ router.post('/instagram/login', asyncHandler(async (req: Request, res: Response)
         return;
     }
 
-    try {
-        const session = await loginInstagramUnofficial({ username, password });
+    // Tentar Web API primeiro (melhor compatibilidade com proxy residencial)
+    // Fallback para Mobile API se Web API falhar
+    const hasProxy = !!process.env.INSTAGRAM_PROXY;
 
-        // Salvar token no store (sem expiração — sessão por cookies)
-        // Token "nunca expira" (cookies duram ~90 dias no Instagram)
+    console.log(`[Social-Unofficial] Instagram login @${username} (proxy=${hasProxy ? 'sim' : 'não'}, tentando Web API primeiro...)`);
+
+    // ── Tentativa 1: Web API (emula Chrome, melhor com proxy) ──
+    try {
+        const session = await loginInstagramWeb({ username, password });
+
         const tokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
 
         const publicToken = saveSocialToken(userId, 'instagram', {
             providerUserId: session.userId,
             providerUsername: session.username,
             profilePictureUrl: session.profilePicUrl,
-            accessToken: 'unofficial-session', // placeholder — cookies são o real auth
+            accessToken: 'web-session',
+            tokenExpiresAt,
+            scopes: ['unofficial', 'web-api', 'publish_photo', 'publish_video', 'publish_story', 'publish_reel'],
+            metadata: {
+                instagramBusinessAccountId: session.userId,
+                igCookies: encrypt(JSON.stringify(session.cookies)),
+                igPassword: encrypt(password),
+                authMode: 'unofficial',
+            },
+        });
+
+        res.json({
+            success: true,
+            data: {
+                ...publicToken,
+                profile: {
+                    fullName: session.fullName,
+                    followersCount: session.followersCount,
+                    followingCount: session.followingCount,
+                    mediaCount: session.mediaCount,
+                },
+                apiMode: 'web',
+            },
+            message: `Instagram @${session.username} conectado com sucesso!`,
+        });
+        return;
+
+    } catch (webErr: any) {
+        console.warn(`[Social-Unofficial] Web API falhou para @${username}: ${webErr.message}. Tentando Mobile API...`);
+
+        // Se Web API retornou erros definitivos, não tentar Mobile API
+        if (webErr.message?.includes('CHECKPOINT_REQUIRED')) {
+            res.status(403).json({
+                success: false,
+                error: 'Instagram solicitou verificação de segurança. Verifique seu email/telefone no app do Instagram e tente novamente.',
+                requiresChallenge: true,
+            });
+            return;
+        }
+        if (webErr.message?.includes('TWO_FACTOR_REQUIRED')) {
+            res.status(403).json({
+                success: false,
+                error: 'Autenticação de dois fatores (2FA) necessária. Desative temporariamente o 2FA.',
+                requiresTwoFactor: true,
+            });
+            return;
+        }
+    }
+
+    // ── Tentativa 2: Mobile API (fallback) ──
+    try {
+        const session = await loginInstagramUnofficial({ username, password });
+
+        const tokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
+        const publicToken = saveSocialToken(userId, 'instagram', {
+            providerUserId: session.userId,
+            providerUsername: session.username,
+            profilePictureUrl: session.profilePicUrl,
+            accessToken: 'unofficial-session',
             tokenExpiresAt,
             scopes: ['unofficial', 'publish_photo', 'publish_video', 'publish_story'],
             metadata: {
@@ -119,29 +183,27 @@ router.post('/instagram/login', asyncHandler(async (req: Request, res: Response)
                     followingCount: session.followingCount,
                     mediaCount: session.mediaCount,
                 },
+                apiMode: 'mobile',
             },
             message: `Instagram @${session.username} conectado com sucesso!`,
         });
     } catch (err: any) {
-        console.error('[Social-Unofficial] Erro login Instagram:', err?.name, err?.message);
+        console.error('[Social-Unofficial] Ambas APIs falharam para Instagram:', err?.name, err?.message);
 
         let errorMsg = 'Erro ao conectar Instagram';
         let statusCode = 400;
 
         if (err.name === 'IgLoginBadPasswordError') {
-            // Instagram retorna "bad password" tanto para senha errada quanto para
-            // login de IPs de datacenter. Incluir dica sobre proxy.
-            const isDatacenter = !process.env.INSTAGRAM_PROXY;
-            errorMsg = isDatacenter
-                ? 'Senha incorreta ou login bloqueado por IP de datacenter. Configure INSTAGRAM_PROXY no .env com um proxy residencial para resolver.'
-                : 'Senha incorreta. Verifique suas credenciais.';
+            errorMsg = hasProxy
+                ? 'Senha incorreta. Verifique suas credenciais do Instagram.'
+                : 'Senha incorreta ou login bloqueado por IP de datacenter. Vá em Configurações → Proxy e configure um proxy residencial.';
         } else if (err.name === 'IgLoginInvalidUserError') {
-            errorMsg = 'Usuário não encontrado';
+            errorMsg = 'Usuário do Instagram não encontrado. Verifique o nome de usuário.';
         } else if (err.name === 'IgLoginTwoFactorRequiredError') {
-            errorMsg = 'Autenticação de dois fatores (2FA) necessária. Desative temporariamente ou use um app authenticator.';
+            errorMsg = 'Autenticação de dois fatores (2FA) necessária. Desative temporariamente o 2FA na sua conta do Instagram.';
             statusCode = 403;
         } else if (err.name === 'IgCheckpointError') {
-            errorMsg = 'Instagram solicitou verificação de segurança. Verifique seu email/telefone e tente novamente.';
+            errorMsg = 'Instagram solicitou verificação de segurança. Abra o app do Instagram, confirme a verificação e tente novamente.';
             statusCode = 403;
         } else if (err.name === 'IgChallengeWrongCodeError') {
             errorMsg = 'Código de verificação incorreto';
@@ -149,8 +211,12 @@ router.post('/instagram/login', asyncHandler(async (req: Request, res: Response)
             errorMsg = 'Sessão expirada. Reconecte a conta.';
             statusCode = 401;
         } else if (err.message?.includes('ECONNREFUSED') || err.message?.includes('ENOTFOUND')) {
-            errorMsg = 'Não foi possível conectar ao Instagram. Verifique sua conexão de internet.';
+            errorMsg = 'Não foi possível conectar ao Instagram. Verifique sua conexão de internet ou configuração de proxy.';
             statusCode = 502;
+        } else if (err.message?.includes('LOGIN_FAILED')) {
+            errorMsg = hasProxy
+                ? 'Login falhou. Verifique suas credenciais do Instagram.'
+                : 'Login falhou. Configure um proxy residencial em Configurações → Proxy.';
         } else if (err.message) {
             errorMsg = err.message;
         }

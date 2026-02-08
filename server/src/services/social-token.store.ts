@@ -10,17 +10,11 @@ import path from 'path';
 import crypto from 'crypto';
 import { encrypt, decrypt } from './crypto.service.js';
 import type { SocialToken, PublicSocialToken, SocialProvider } from '../types/social.types.js';
+import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
 const TOKENS_FILE = path.join(DATA_DIR, 'social-tokens.json');
 
 // ── Helpers de Persistência ────────────────────────────────────────────────
-
-function ensureDataDir(): void {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-}
 
 function readTokens(): SocialToken[] {
     ensureDataDir();

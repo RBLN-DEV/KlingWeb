@@ -19,7 +19,8 @@ import crypto from 'crypto';
 import { RateLimiterService } from './rate-limiter.service.js';
 import type { QueueJob, QueueJobType, QueueJobPriority, QueueJobStatus, SocialProvider } from '../types/social.types.js';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+
 const QUEUE_FILE = path.join(DATA_DIR, 'social-queue.json');
 
 // ── Tipos de handler ───────────────────────────────────────────────────────
@@ -279,9 +280,7 @@ export class SocialQueueService {
      */
     private persist(): void {
         try {
-            if (!fs.existsSync(DATA_DIR)) {
-                fs.mkdirSync(DATA_DIR, { recursive: true });
-            }
+            ensureDataDir();
             const tempFile = QUEUE_FILE + '.tmp';
             fs.writeFileSync(tempFile, JSON.stringify(this.queue, null, 2), 'utf-8');
             fs.renameSync(tempFile, QUEUE_FILE);

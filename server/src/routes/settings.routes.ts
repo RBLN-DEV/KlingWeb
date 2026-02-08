@@ -45,13 +45,10 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 
 router.use(requireAuth);
 
+import { DATA_DIR, ensureDataDir as ensureDataDirExists, writeFileAtomic, readJsonSafe } from '../services/data-dir.js';
+
 // ── Persistência de Proxy em disco ──────────────────────────────────────────
 
-// Em produção no Azure App Service, /home é persistente
-// Em desenvolvimento, usa /app/data ou ./data
-const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
-    ? '/home/data'
-    : path.join(process.cwd(), 'data');
 const PROXY_CONFIG_FILE = path.join(DATA_DIR, 'proxy-config.json');
 
 interface ProxyConfig {
@@ -62,23 +59,13 @@ interface ProxyConfig {
 }
 
 function loadProxyConfig(): ProxyConfig | null {
-    try {
-        if (!fs.existsSync(PROXY_CONFIG_FILE)) return null;
-        const raw = fs.readFileSync(PROXY_CONFIG_FILE, 'utf-8');
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
+    return readJsonSafe<ProxyConfig>(PROXY_CONFIG_FILE);
 }
 
 function saveProxyConfig(config: ProxyConfig): void {
     try {
-        if (!fs.existsSync(DATA_DIR)) {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-        }
-        const tmp = PROXY_CONFIG_FILE + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(config, null, 2), 'utf-8');
-        fs.renameSync(tmp, PROXY_CONFIG_FILE);
+        ensureDataDirExists();
+        writeFileAtomic(PROXY_CONFIG_FILE, JSON.stringify(config, null, 2));
     } catch (err) {
         console.error('[Settings] Erro ao salvar proxy config:', err);
     }

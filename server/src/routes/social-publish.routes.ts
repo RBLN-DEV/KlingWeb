@@ -19,11 +19,12 @@ const router = Router();
 
 // ── Data Layer ─────────────────────────────────────────────────────────────
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+import { DATA_DIR, ensureDataDir } from '../services/data-dir.js';
+
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
 
 function readPublications(): Publication[] {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    ensureDataDir();
     if (!fs.existsSync(PUBLICATIONS_FILE)) return [];
     try {
         return JSON.parse(fs.readFileSync(PUBLICATIONS_FILE, 'utf-8'));
@@ -31,7 +32,7 @@ function readPublications(): Publication[] {
 }
 
 function writePublications(pubs: Publication[]): void {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    ensureDataDir();
     const tmp = PUBLICATIONS_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(pubs, null, 2), 'utf-8');
     fs.renameSync(tmp, PUBLICATIONS_FILE);
