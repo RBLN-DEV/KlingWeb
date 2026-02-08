@@ -18,6 +18,7 @@ import { Settings } from '@/pages/Settings';
 import { AdminUsers } from '@/pages/AdminUsers';
 import { SocialHub } from '@/pages/SocialHub';
 import { SocialDashboard } from '@/pages/SocialDashboard';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { cn } from '@/lib/utils';
 
 // Protected Route Component
@@ -145,8 +146,8 @@ function AppRoutes() {
           <Route path="/video" element={<VideoGeneration />} />
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/image-gallery" element={<ImageGallery />} />
-          <Route path="/social-hub" element={<SocialHub />} />
-          <Route path="/social-dashboard" element={<SocialDashboard />} />
+          <Route path="/social-hub" element={<ErrorBoundary fallbackTitle="Erro no Social Hub" fallbackMessage="Não foi possível carregar a página de redes sociais."><SocialHub /></ErrorBoundary>} />
+          <Route path="/social-dashboard" element={<ErrorBoundary fallbackTitle="Erro no Social Dashboard" fallbackMessage="Não foi possível carregar as métricas de redes sociais."><SocialDashboard /></ErrorBoundary>} />
           <Route path="/prompts" element={<Prompts />} />
           <Route path="/settings" element={<Settings />} />
           

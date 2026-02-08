@@ -95,6 +95,10 @@ export function useSocialPublish() {
       const res = await fetch(`${API_BASE}/api/social/publications?${params}`, {
         headers: headers(),
       });
+      if (!res.ok) {
+        setError(`Erro ${res.status} ao carregar publicações`);
+        return;
+      }
       const json = await res.json();
       if (json.success) {
         setPublications(json.data);

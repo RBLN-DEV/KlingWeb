@@ -37,6 +37,7 @@ export function useSocialMetrics() {
       const res = await fetch(`${API_BASE}/api/social/dashboard/summary?period=${period}`, {
         headers: headers(),
       });
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setSummary(json.data);
@@ -44,7 +45,7 @@ export function useSocialMetrics() {
         setError(json.error || 'Erro ao carregar resumo');
       }
     } catch (err) {
-      setError('Erro de rede');
+      // Silent — prevent crash on network/parse errors
     } finally {
       setIsLoading(false);
     }
@@ -61,6 +62,7 @@ export function useSocialMetrics() {
       const res = await fetch(`${API_BASE}/api/social/dashboard/chart?${params}`, {
         headers: headers(),
       });
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setChartData(json.data);
@@ -77,6 +79,7 @@ export function useSocialMetrics() {
       const res = await fetch(`${API_BASE}/api/social/dashboard/top-posts?limit=${limit}`, {
         headers: headers(),
       });
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setTopPosts(json.data);
@@ -93,6 +96,7 @@ export function useSocialMetrics() {
       const res = await fetch(`${API_BASE}/api/social/dashboard/comparison?period=${period}`, {
         headers: headers(),
       });
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setComparison(json.data);
@@ -109,6 +113,7 @@ export function useSocialMetrics() {
       const res = await fetch(`${API_BASE}/api/social/dashboard/rate-limits`, {
         headers: headers(),
       });
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setRateLimits(json.data);

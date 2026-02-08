@@ -500,7 +500,6 @@ export function Settings() {
                     onChange={(e) => { setProxyConfig({ ...proxyConfig, proxyUrl: e.target.value }); setProxyTestResult('idle'); }}
                     placeholder="http://user:pass@proxy.example.com:8080"
                     className="bg-[#1a1a1a] border-[#444444] text-white font-mono text-sm"
-                    disabled={!proxyConfig.enabled}
                   />
                   <p className="text-xs text-[#666] mt-1">Formato: http://usuario:senha@host:porta ou socks5://host:porta</p>
                 </div>
@@ -541,7 +540,7 @@ export function Settings() {
                   <Button
                     variant="outline"
                     onClick={handleTestProxy}
-                    disabled={!proxyConfig.enabled || !proxyConfig.proxyUrl.trim() || proxyTestResult === 'testing'}
+                    disabled={!proxyConfig.proxyUrl.trim() || proxyTestResult === 'testing'}
                     className="border-[#444444] text-white hover:bg-[#2a2a2a]"
                   >
                     <TestTube className="w-4 h-4 mr-2" />

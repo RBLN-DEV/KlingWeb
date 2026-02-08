@@ -33,16 +33,21 @@ export function useSocialAuth() {
     try {
       // Buscar conexões oficiais
       const res = await fetch(`${API_BASE}/api/social/connections`, { headers: headers() });
-      const json = await res.json();
-      if (checkSessionExpired(res, json)) return;
+      let officialConnections: SocialConnection[] = [];
+      try {
+        const json = await res.json();
+        if (checkSessionExpired(res, json)) return;
+        officialConnections = json.success ? json.data : [];
+      } catch { /* response not JSON */ }
 
       // Buscar conexões não-oficiais
       const resUnofficial = await fetch(`${API_BASE}/api/social/unofficial/connections`, { headers: headers() });
-      const jsonUnofficial = await resUnofficial.json();
-      if (checkSessionExpired(resUnofficial, jsonUnofficial)) return;
-
-      const officialConnections: SocialConnection[] = json.success ? json.data : [];
-      const unofficialConnections: SocialConnection[] = jsonUnofficial.success ? jsonUnofficial.data : [];
+      let unofficialConnections: SocialConnection[] = [];
+      try {
+        const jsonUnofficial = await resUnofficial.json();
+        if (checkSessionExpired(resUnofficial, jsonUnofficial)) return;
+        unofficialConnections = jsonUnofficial.success ? jsonUnofficial.data : [];
+      } catch { /* response not JSON */ }
 
       // Marcar authMode em cada conexão
       const allConnections = [

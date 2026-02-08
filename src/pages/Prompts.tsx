@@ -65,6 +65,11 @@ export function Prompts() {
   const [editingPrompt, setEditingPrompt] = useState<PromptTemplate | null>(null);
   const [formData, setFormData] = useState<PromptFormData>(emptyForm);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = useCallback((promptId: string) => {
+    setFailedImages(prev => new Set(prev).add(promptId));
+  }, []);
 
   const refreshPrompts = useCallback(() => {
     setAllPrompts(getAllPrompts());
@@ -252,15 +257,18 @@ export function Prompts() {
                 className="aspect-[3/4] bg-[#1a1a1a] relative overflow-hidden cursor-pointer"
                 onClick={() => setSelectedPrompt(prompt)}
               >
-                {prompt.previewUrl ? (
+                {prompt.previewUrl && !failedImages.has(prompt.id) ? (
                   <img
                     src={prompt.previewUrl}
                     alt={prompt.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={() => handleImageError(prompt.id)}
+                    loading="lazy"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Sparkles className="w-12 h-12 text-[#444444]" />
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#7e57c2]/20 to-[#1a1a1a]">
+                    <Sparkles className="w-12 h-12 text-[#7e57c2]/60 mb-2" />
+                    <span className="text-xs text-[#666] px-4 text-center truncate max-w-full">{prompt.title}</span>
                   </div>
                 )}
 
@@ -346,6 +354,23 @@ export function Prompts() {
                     <ExternalLink className="w-4 h-4" />
                   </button>
                 </div>
+                {/* Edit/Delete for custom prompts — always visible */}
+                {prompt.isCustom && (
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => handleOpenEdit(prompt)}
+                      className="flex-1 py-1.5 bg-[#1a1a1a] hover:bg-[#444444] rounded-lg text-xs text-[#b0b0b0] hover:text-white transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Pencil className="w-3 h-3" /> Editar
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(prompt.id)}
+                      className="flex-1 py-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-xs text-red-400 hover:text-red-300 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Excluir
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}

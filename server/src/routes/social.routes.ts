@@ -52,6 +52,8 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 
 // OAuth e Conexões (API Oficial)
 router.use('/oauth', socialOAuthRoutes);
+// Montar rotas de connections diretamente em /api/social/ (frontend busca /api/social/connections)
+router.use('/', socialOAuthRoutes);
 
 // Autenticação Não-Oficial (username/password)
 router.use('/unofficial', socialUnofficialRoutes);
