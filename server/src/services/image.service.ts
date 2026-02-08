@@ -37,8 +37,10 @@ export class ImageService {
     constructor() {
         this.initializeClients();
 
-        // Diretório para arquivos temporários
-        this.tempDir = path.join(process.cwd(), 'temp_uploads');
+        // Diretório para arquivos temporários — persistente em produção
+        this.tempDir = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
+            ? '/home/temp_uploads'
+            : path.join(process.cwd(), 'temp_uploads');
         if (!fs.existsSync(this.tempDir)) {
             fs.mkdirSync(this.tempDir, { recursive: true });
         }
@@ -63,8 +65,10 @@ export class ImageService {
             console.log('[ImageService] Azure DALL-E configurado');
         }
 
-        // Diretório para arquivos temporários
-        this.tempDir = path.join(process.cwd(), 'temp_uploads');
+        // Diretório para arquivos temporários — persistente em produção
+        this.tempDir = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
+            ? '/home/temp_uploads'
+            : path.join(process.cwd(), 'temp_uploads');
         if (!fs.existsSync(this.tempDir)) {
             fs.mkdirSync(this.tempDir, { recursive: true });
         }

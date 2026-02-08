@@ -11,31 +11,84 @@ import crypto from 'crypto';
 import { encrypt, decrypt } from './crypto.service.js';
 import type { SocialToken, PublicSocialToken, SocialProvider } from '../types/social.types.js';
 import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+import { isTableStorageAvailable } from './database/table-storage.service.js';
+import {
+    dbGetAllTokens, dbGetTokenById, dbGetUserTokens as dbGetUserTokensRepo,
+    dbGetActiveUserTokens, dbGetUserProviderTokens, dbSaveToken,
+    dbDeleteToken, dbGetTokensExpiringBefore, dbGetTokenStats as dbGetTokenStatsRepo,
+} from './database/social-token.repository.js';
 
 const TOKENS_FILE = path.join(DATA_DIR, 'social-tokens.json');
+const useDb = isTableStorageAvailable();
+
+// Cache local para leitura sync
+let tokensCache: SocialToken[] | null = null;
 
 // ── Helpers de Persistência ────────────────────────────────────────────────
 
-function readTokens(): SocialToken[] {
+function readTokensFromFile(): SocialToken[] {
     ensureDataDir();
-    if (!fs.existsSync(TOKENS_FILE)) {
-        return [];
-    }
+    if (!fs.existsSync(TOKENS_FILE)) return [];
     try {
-        const data = fs.readFileSync(TOKENS_FILE, 'utf-8');
-        return JSON.parse(data);
+        return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf-8'));
     } catch {
         console.error('[SocialTokenStore] Erro ao ler tokens, retornando array vazio');
         return [];
     }
 }
 
-function writeTokens(tokens: SocialToken[]): void {
+function writeTokensToFile(tokens: SocialToken[]): void {
     ensureDataDir();
-    // Escrita atômica: grava em arquivo temp → renomeia
     const tempFile = TOKENS_FILE + '.tmp';
     fs.writeFileSync(tempFile, JSON.stringify(tokens, null, 2), 'utf-8');
     fs.renameSync(tempFile, TOKENS_FILE);
+}
+
+function readTokens(): SocialToken[] {
+    if (tokensCache) return [...tokensCache];
+    const tokens = readTokensFromFile();
+    tokensCache = tokens;
+    return [...tokens];
+}
+
+function writeTokens(tokens: SocialToken[]): void {
+    tokensCache = [...tokens];
+    writeTokensToFile(tokens);
+    if (useDb) {
+        Promise.all(tokens.map(t => dbSaveToken(t))).catch(err =>
+            console.error('[SocialTokenStore] Erro ao gravar no Table Storage:', err.message)
+        );
+    }
+}
+
+/**
+ * Inicializa o store: carrega do DB ou migra JSON→DB
+ */
+export async function initTokenStore(): Promise<void> {
+    if (useDb) {
+        try {
+            const dbTokens = await dbGetAllTokens();
+            if (dbTokens.length > 0) {
+                tokensCache = dbTokens;
+                console.log(`[SocialTokenStore] ${dbTokens.length} tokens carregados do Table Storage`);
+            } else {
+                const fileTokens = readTokensFromFile();
+                if (fileTokens.length > 0) {
+                    console.log(`[SocialTokenStore] Migrando ${fileTokens.length} tokens de JSON → Table Storage...`);
+                    for (const t of fileTokens) await dbSaveToken(t);
+                    tokensCache = fileTokens;
+                    console.log('[SocialTokenStore] Migração concluída.');
+                } else {
+                    tokensCache = [];
+                }
+            }
+        } catch (err: any) {
+            console.error('[SocialTokenStore] Fallback JSON:', err.message);
+            tokensCache = readTokensFromFile();
+        }
+    } else {
+        tokensCache = readTokensFromFile();
+    }
 }
 
 /**

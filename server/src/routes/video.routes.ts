@@ -7,11 +7,20 @@ import fs from 'fs';
 import { getKlingService } from '../services/kling.service.js';
 import { getStorageService } from '../services/storage.service.js';
 import { VideoGenerationResponse, ApiResponse } from '../types/index.js';
+import { DATA_DIR } from '../services/data-dir.js';
+import { isTableStorageAvailable } from '../services/database/table-storage.service.js';
+import {
+    dbGetAllVideoTasks, dbGetVideoTask, dbSaveVideoTask, dbDeleteVideoTask,
+    type VideoTaskRecord,
+} from '../services/database/video-task.repository.js';
 
 const router = Router();
 
 // Configurar multer para upload de vídeos de referência
-const TEMP_VIDEO_DIR = path.join(process.cwd(), 'temp_videos');
+// Em produção, usar /home/temp_videos para persistência; em dev, usar CWD
+const TEMP_VIDEO_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/home')
+    ? '/home/temp_videos'
+    : path.join(process.cwd(), 'temp_videos');
 if (!fs.existsSync(TEMP_VIDEO_DIR)) {
     fs.mkdirSync(TEMP_VIDEO_DIR, { recursive: true });
 }
@@ -36,8 +45,59 @@ const uploadVideo = multer({
     },
 });
 
-// Store de tarefas em memória (em produção, usar Redis/DB)
+// Store de tarefas — com persistência em Table Storage + fallback in-memory
 const tasksStore = new Map<string, VideoGenerationResponse>();
+const useDb = isTableStorageAvailable();
+
+// Persistir tarefa no DB (async, fire-and-forget)
+function persistTask(task: VideoGenerationResponse): void {
+    if (useDb) {
+        const record: VideoTaskRecord = {
+            id: task.id,
+            taskId: task.taskId || '',
+            title: task.title,
+            status: task.status,
+            progress: task.progress,
+            statusMessage: task.statusMessage || '',
+            thumbnailUrl: task.thumbnailUrl,
+            videoUrl: task.videoUrl,
+            error: task.error,
+            createdAt: task.createdAt instanceof Date ? task.createdAt.toISOString() : String(task.createdAt),
+            updatedAt: task.updatedAt instanceof Date ? task.updatedAt.toISOString() : String(task.updatedAt),
+        };
+        dbSaveVideoTask(record).catch(err =>
+            console.error('[VideoRoute] Erro ao salvar task no DB:', err.message)
+        );
+    }
+}
+
+/**
+ * Inicializa tarefas do Table Storage (carrega para o Map in-memory)
+ */
+export async function initVideoTasksStore(): Promise<void> {
+    if (!useDb) return;
+    try {
+        const tasks = await dbGetAllVideoTasks();
+        for (const t of tasks) {
+            tasksStore.set(t.id, {
+                id: t.id,
+                taskId: t.taskId,
+                title: t.title,
+                status: t.status as any,
+                progress: t.progress,
+                statusMessage: t.statusMessage,
+                thumbnailUrl: t.thumbnailUrl,
+                videoUrl: t.videoUrl,
+                error: t.error,
+                createdAt: new Date(t.createdAt),
+                updatedAt: new Date(t.updatedAt),
+            });
+        }
+        console.log(`[VideoRoute] ${tasks.length} video tasks restauradas do Table Storage`);
+    } catch (err: any) {
+        console.error('[VideoRoute] Erro ao restaurar tasks do DB:', err.message);
+    }
+}
 
 /**
  * POST /api/video/generate
@@ -108,6 +168,7 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
             task.status = 'processing';
             task.statusMessage = 'Enviando para Kling API...';
             task.updatedAt = new Date();
+            persistTask(task);
 
             const videoUrl = await klingService.generateVideo(
                 imageInput!,
@@ -131,6 +192,7 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
             task.statusMessage = 'Vídeo gerado com sucesso!';
             task.videoUrl = videoUrl;
             task.updatedAt = new Date();
+            persistTask(task);
 
             console.log(`[VideoRoute] Tarefa ${id} concluída: ${videoUrl}`);
         } catch (error) {
@@ -138,6 +200,7 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
             task.error = error instanceof Error ? error.message : 'Erro desconhecido';
             task.statusMessage = 'Falha na geração';
             task.updatedAt = new Date();
+            persistTask(task);
 
             console.error(`[VideoRoute] Tarefa ${id} falhou:`, error);
         }
@@ -288,6 +351,9 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
 
     if (tasksStore.has(id)) {
         tasksStore.delete(id);
+        if (useDb) {
+            dbDeleteVideoTask(id).catch(() => {});
+        }
         res.json({
             success: true,
             message: 'Tarefa removida',

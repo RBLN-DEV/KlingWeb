@@ -20,8 +20,13 @@ import { RateLimiterService } from './rate-limiter.service.js';
 import type { QueueJob, QueueJobType, QueueJobPriority, QueueJobStatus, SocialProvider } from '../types/social.types.js';
 
 import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+import { isTableStorageAvailable } from './database/table-storage.service.js';
+import {
+    dbGetAllJobs, dbSaveJob, dbDeleteJob, dbCleanOldJobs,
+} from './database/queue.repository.js';
 
 const QUEUE_FILE = path.join(DATA_DIR, 'social-queue.json');
+const useDb = isTableStorageAvailable();
 
 // ── Tipos de handler ───────────────────────────────────────────────────────
 
@@ -276,7 +281,7 @@ export class SocialQueueService {
     // ── Persistência ───────────────────────────────────────────────────────
 
     /**
-     * Persiste fila em disco (escrita atômica)
+     * Persiste fila em disco (escrita atômica) + Table Storage
      */
     private persist(): void {
         try {
@@ -285,14 +290,23 @@ export class SocialQueueService {
             fs.writeFileSync(tempFile, JSON.stringify(this.queue, null, 2), 'utf-8');
             fs.renameSync(tempFile, QUEUE_FILE);
         } catch (error) {
-            console.error('[SocialQueue] Erro ao persistir fila:', error);
+            console.error('[SocialQueue] Erro ao persistir fila em JSON:', error);
+        }
+
+        // Gravar no Table Storage (async)
+        if (useDb) {
+            Promise.all(this.queue.map(j => dbSaveJob(j))).catch(err =>
+                console.error('[SocialQueue] Erro ao gravar no Table Storage:', err.message)
+            );
         }
     }
 
     /**
-     * Restaura fila do disco
+     * Restaura fila do disco ou Table Storage
      */
     private restore(): void {
+        // Tentar restaurar do Table Storage primeiro (async, mas no constructor precisamos sync)
+        // Usar JSON como fonte sync inicial; initQueueStore() faz a migração depois
         try {
             if (fs.existsSync(QUEUE_FILE)) {
                 const data = fs.readFileSync(QUEUE_FILE, 'utf-8');
@@ -320,6 +334,26 @@ export class SocialQueueService {
         } catch {
             console.error('[SocialQueue] Erro ao restaurar fila, iniciando vazia');
             this.queue = [];
+        }
+    }
+
+    /**
+     * Inicializa a fila a partir do Table Storage (migração JSON→DB)
+     */
+    async initFromDb(): Promise<void> {
+        if (!useDb) return;
+        try {
+            const dbJobs = await dbGetAllJobs();
+            if (dbJobs.length > 0) {
+                this.queue = dbJobs;
+                console.log(`[SocialQueue] ${dbJobs.length} jobs carregados do Table Storage`);
+            } else if (this.queue.length > 0) {
+                console.log(`[SocialQueue] Migrando ${this.queue.length} jobs de JSON → Table Storage...`);
+                for (const j of this.queue) await dbSaveJob(j);
+                console.log('[SocialQueue] Migração concluída.');
+            }
+        } catch (err: any) {
+            console.error('[SocialQueue] Fallback JSON:', err.message);
         }
     }
 

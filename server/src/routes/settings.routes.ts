@@ -46,6 +46,12 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 router.use(requireAuth);
 
 import { DATA_DIR, ensureDataDir as ensureDataDirExists, writeFileAtomic, readJsonSafe } from '../services/data-dir.js';
+import { isTableStorageAvailable } from '../services/database/table-storage.service.js';
+import {
+    dbGetProxyConfig, dbSaveProxyConfig, type ProxyConfig as DbProxyConfig,
+} from '../services/database/settings.repository.js';
+
+const useDb = isTableStorageAvailable();
 
 // ── Persistência de Proxy em disco ──────────────────────────────────────────
 
@@ -58,16 +64,58 @@ interface ProxyConfig {
     updatedBy: string;
 }
 
-function loadProxyConfig(): ProxyConfig | null {
+function loadProxyConfigFromFile(): ProxyConfig | null {
     return readJsonSafe<ProxyConfig>(PROXY_CONFIG_FILE);
 }
 
-function saveProxyConfig(config: ProxyConfig): void {
+function saveProxyConfigToFile(config: ProxyConfig): void {
     try {
         ensureDataDirExists();
         writeFileAtomic(PROXY_CONFIG_FILE, JSON.stringify(config, null, 2));
     } catch (err) {
-        console.error('[Settings] Erro ao salvar proxy config:', err);
+        console.error('[Settings] Erro ao salvar proxy config em arquivo:', err);
+    }
+}
+
+function loadProxyConfig(): ProxyConfig | null {
+    return loadProxyConfigFromFile();
+}
+
+function saveProxyConfig(config: ProxyConfig): void {
+    saveProxyConfigToFile(config);
+    // Salvar no Table Storage (async)
+    if (useDb) {
+        dbSaveProxyConfig(config).catch(err =>
+            console.error('[Settings] Erro ao salvar proxy no Table Storage:', err.message)
+        );
+    }
+}
+
+/**
+ * Inicializa proxy config: carrega do DB ou migra do disco
+ */
+export async function initProxyFromDb(): Promise<void> {
+    if (!useDb) return;
+    try {
+        const dbConfig = await dbGetProxyConfig();
+        if (dbConfig) {
+            // Gravar localmente como cache
+            saveProxyConfigToFile(dbConfig);
+            if (dbConfig.enabled && dbConfig.proxyUrl) {
+                process.env.INSTAGRAM_PROXY = dbConfig.proxyUrl;
+                process.env.HTTPS_PROXY = dbConfig.proxyUrl;
+                console.log(`[Settings] Proxy carregado do Table Storage: ${dbConfig.proxyUrl.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}`);
+            }
+            return;
+        }
+        // Migrar do disco para DB
+        const fileConfig = loadProxyConfigFromFile();
+        if (fileConfig) {
+            await dbSaveProxyConfig(fileConfig);
+            console.log('[Settings] Proxy config migrado para Table Storage');
+        }
+    } catch (err: any) {
+        console.error('[Settings] Fallback JSON para proxy:', err.message);
     }
 }
 

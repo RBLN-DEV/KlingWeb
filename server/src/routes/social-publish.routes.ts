@@ -20,10 +20,19 @@ const router = Router();
 // ── Data Layer ─────────────────────────────────────────────────────────────
 
 import { DATA_DIR, ensureDataDir } from '../services/data-dir.js';
+import { isTableStorageAvailable } from '../services/database/table-storage.service.js';
+import {
+    dbGetAllPublications, dbGetPublicationById as dbGetPub,
+    dbGetUserPublications, dbSavePublication, dbDeletePublication,
+} from '../services/database/publication.repository.js';
 
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
+const useDb = isTableStorageAvailable();
 
-function readPublications(): Publication[] {
+// Cache local para leitura sync
+let pubsCache: Publication[] | null = null;
+
+function readPublicationsFromFile(): Publication[] {
     ensureDataDir();
     if (!fs.existsSync(PUBLICATIONS_FILE)) return [];
     try {
@@ -31,11 +40,30 @@ function readPublications(): Publication[] {
     } catch { return []; }
 }
 
-function writePublications(pubs: Publication[]): void {
+function writePublicationsToFile(pubs: Publication[]): void {
     ensureDataDir();
     const tmp = PUBLICATIONS_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(pubs, null, 2), 'utf-8');
     fs.renameSync(tmp, PUBLICATIONS_FILE);
+}
+
+function readPublications(): Publication[] {
+    if (pubsCache) return [...pubsCache];
+    const pubs = readPublicationsFromFile();
+    pubsCache = pubs;
+    return [...pubs];
+}
+
+function writePublications(pubs: Publication[]): void {
+    pubsCache = [...pubs];
+    writePublicationsToFile(pubs);
+    // Gravar no Table Storage (async)
+    if (useDb) {
+        const recent = pubs.slice(-20);
+        Promise.all(recent.map(p => dbSavePublication(p))).catch(err =>
+            console.error('[SocialPublish] Erro ao gravar no Table Storage:', err.message)
+        );
+    }
 }
 
 export function getPublicationById(id: string): Publication | undefined {
@@ -50,6 +78,36 @@ export function updatePublication(id: string, updates: Partial<Publication>): Pu
     pubs[idx] = { ...pubs[idx], ...updates, updatedAt: new Date().toISOString() };
     writePublications(pubs);
     return pubs[idx];
+}
+
+/**
+ * Inicializa publications: carrega do DB ou migra JSON→DB
+ */
+export async function initPublicationsStore(): Promise<void> {
+    if (useDb) {
+        try {
+            const dbPubs = await dbGetAllPublications();
+            if (dbPubs.length > 0) {
+                pubsCache = dbPubs;
+                console.log(`[SocialPublish] ${dbPubs.length} publicações carregadas do Table Storage`);
+            } else {
+                const filePubs = readPublicationsFromFile();
+                if (filePubs.length > 0) {
+                    console.log(`[SocialPublish] Migrando ${filePubs.length} publicações de JSON → Table Storage...`);
+                    for (const p of filePubs) await dbSavePublication(p);
+                    pubsCache = filePubs;
+                    console.log('[SocialPublish] Migração concluída.');
+                } else {
+                    pubsCache = [];
+                }
+            }
+        } catch (err: any) {
+            console.error('[SocialPublish] Fallback JSON:', err.message);
+            pubsCache = readPublicationsFromFile();
+        }
+    } else {
+        pubsCache = readPublicationsFromFile();
+    }
 }
 
 // ── Middleware de Autenticação ──────────────────────────────────────────────

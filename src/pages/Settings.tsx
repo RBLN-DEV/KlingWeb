@@ -80,7 +80,7 @@ export function Settings() {
   const [proxyConfig, setProxyConfig] = useState({ proxyUrl: '', enabled: false });
   const [proxyTestResult, setProxyTestResult] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [proxyTestMessage, setProxyTestMessage] = useState('');
-  const [proxyLoaded, setProxyLoaded] = useState(false);
+  const [, setProxyLoaded] = useState(false);
 
   // Carregar config do proxy do backend ao montar
   const loadProxyFromBackend = useCallback(async () => {

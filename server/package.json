@@ -11,6 +11,7 @@
         "start:prod": "node dist/index.js"
     },
     "dependencies": {
+        "@azure/data-tables": "^13.3.2",
         "@azure/identity": "^4.13.0",
         "@azure/openai": "^2.0.0",
         "@azure/storage-blob": "^12.30.0",

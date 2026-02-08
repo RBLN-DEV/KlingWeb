@@ -30,9 +30,19 @@ import type {
 // ── Paths ──────────────────────────────────────────────────────────────────
 
 import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+import { isTableStorageAvailable } from './database/table-storage.service.js';
+import {
+    dbGetSnapshotsByPublication, dbGetLatestSnapshot, dbSaveSnapshot,
+    dbGetAllSnapshots, dbCleanOldSnapshots,
+} from './database/engagement.repository.js';
+import {
+    dbGetAllPublications, dbGetPublicationById as dbGetPub,
+    dbGetPublicationByProviderMediaId,
+} from './database/publication.repository.js';
 
 const METRICS_FILE = path.join(DATA_DIR, 'engagement-metrics.json');
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
+const useDb = isTableStorageAvailable();
 
 // ── Configuração de Polling ────────────────────────────────────────────────
 
@@ -54,7 +64,7 @@ const SCHEDULER_INTERVAL_MS = 2 * 60 * 1000;
 
 // ── Data Layer ─────────────────────────────────────────────────────────────
 
-function readMetrics(): EngagementSnapshot[] {
+function readMetricsFromFile(): EngagementSnapshot[] {
     ensureDataDir();
     if (!fs.existsSync(METRICS_FILE)) return [];
     try {
@@ -64,20 +74,56 @@ function readMetrics(): EngagementSnapshot[] {
     }
 }
 
-function writeMetrics(metrics: EngagementSnapshot[]): void {
+function writeMetricsToFile(metrics: EngagementSnapshot[]): void {
     ensureDataDir();
     const tempFile = METRICS_FILE + '.tmp';
     fs.writeFileSync(tempFile, JSON.stringify(metrics, null, 2), 'utf-8');
     fs.renameSync(tempFile, METRICS_FILE);
 }
 
-function readPublications(): Publication[] {
+function readPublicationsFromFile(): Publication[] {
     if (!fs.existsSync(PUBLICATIONS_FILE)) return [];
     try {
         return JSON.parse(fs.readFileSync(PUBLICATIONS_FILE, 'utf-8'));
     } catch {
         return [];
     }
+}
+
+// Wrappers com fallback: DB ou JSON
+function readMetrics(): EngagementSnapshot[] {
+    return readMetricsFromFile();
+}
+
+function writeMetrics(metrics: EngagementSnapshot[]): void {
+    writeMetricsToFile(metrics);
+    // Gravar snapshots no Table Storage (async)
+    if (useDb) {
+        Promise.all(metrics.slice(-10).map(m => dbSaveSnapshot(m))).catch(err =>
+            console.error('[Engagement] Erro ao gravar métricas no Table Storage:', err.message)
+        );
+    }
+}
+
+function readPublications(): Publication[] {
+    return readPublicationsFromFile();
+}
+
+// Async versions for DB
+async function readMetricsAsync(): Promise<EngagementSnapshot[]> {
+    if (useDb) {
+        try { return await dbGetAllSnapshots(); }
+        catch { return readMetricsFromFile(); }
+    }
+    return readMetricsFromFile();
+}
+
+async function readPublicationsAsync(): Promise<Publication[]> {
+    if (useDb) {
+        try { return await dbGetAllPublications(); }
+        catch { return readPublicationsFromFile(); }
+    }
+    return readPublicationsFromFile();
 }
 
 // ── Engagement Service ─────────────────────────────────────────────────────
@@ -94,6 +140,28 @@ export class EngagementService {
             EngagementService.instance = new EngagementService();
         }
         return EngagementService.instance;
+    }
+
+    /**
+     * Inicializa métricas: migra JSON → Table Storage se necessário
+     */
+    async initFromDb(): Promise<void> {
+        if (!useDb) return;
+        try {
+            const dbMetrics = await dbGetAllSnapshots();
+            if (dbMetrics.length === 0) {
+                const fileMetrics = readMetricsFromFile();
+                if (fileMetrics.length > 0) {
+                    console.log(`[Engagement] Migrando ${fileMetrics.length} snapshots de JSON → Table Storage...`);
+                    for (const m of fileMetrics) await dbSaveSnapshot(m);
+                    console.log('[Engagement] Migração de métricas concluída.');
+                }
+            } else {
+                console.log(`[Engagement] ${dbMetrics.length} snapshots no Table Storage.`);
+            }
+        } catch (err: any) {
+            console.error('[Engagement] Fallback JSON:', err.message);
+        }
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────

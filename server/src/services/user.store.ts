@@ -2,6 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { DATA_DIR, ensureDataDir, writeFileAtomic } from './data-dir.js';
+import { isTableStorageAvailable } from './database/table-storage.service.js';
+import {
+    dbGetAllUsers, dbGetUserById, dbGetUserByEmail,
+    dbSaveUser, dbDeleteUser, dbHasAdmin, dbCountAdmins,
+} from './database/user.repository.js';
 
 export interface StoredUser {
     id: string;
@@ -19,6 +24,7 @@ export interface StoredUser {
 export type PublicUser = Omit<StoredUser, 'passwordHash'>;
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const useDb = isTableStorageAvailable();
 
 // Admin padrão — criado automaticamente se nenhum admin existir
 const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@klingai.com';
@@ -28,27 +34,123 @@ function hashPassword(password: string): string {
     return crypto.createHash('sha256').update(password + 'klingai_salt_2025').digest('hex');
 }
 
-function readUsers(): StoredUser[] {
+// ── JSON Fallback (dev / sem Table Storage) ────────────────────────────────
+
+function readUsersFromFile(): StoredUser[] {
     ensureDataDir();
-    if (!fs.existsSync(USERS_FILE)) {
-        return [];
-    }
+    if (!fs.existsSync(USERS_FILE)) return [];
     try {
-        const data = fs.readFileSync(USERS_FILE, 'utf-8');
-        return JSON.parse(data);
-    } catch {
-        return [];
-    }
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+    } catch { return []; }
 }
 
-function writeUsers(users: StoredUser[]): void {
+function writeUsersToFile(users: StoredUser[]): void {
     ensureDataDir();
     writeFileAtomic(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// ── Hybrid helpers (Table Storage ou JSON) ─────────────────────────────────
+
+async function readUsersAsync(): Promise<StoredUser[]> {
+    if (useDb) return dbGetAllUsers();
+    return readUsersFromFile();
+}
+
+async function findUserByEmailAsync(email: string): Promise<StoredUser | null> {
+    if (useDb) return dbGetUserByEmail(email);
+    const users = readUsersFromFile();
+    return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+}
+
+async function findUserByIdAsync(id: string): Promise<StoredUser | null> {
+    if (useDb) return dbGetUserById(id);
+    const users = readUsersFromFile();
+    return users.find(u => u.id === id) || null;
+}
+
+async function saveUserAsync(user: StoredUser): Promise<void> {
+    if (useDb) {
+        await dbSaveUser(user);
+        return;
+    }
+    const users = readUsersFromFile();
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx >= 0) users[idx] = user; else users.push(user);
+    writeUsersToFile(users);
+}
+
+async function removeUserAsync(userId: string): Promise<void> {
+    if (useDb) {
+        await dbDeleteUser(userId);
+        return;
+    }
+    const users = readUsersFromFile();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx >= 0) { users.splice(idx, 1); writeUsersToFile(users); }
 }
 
 function toPublicUser(user: StoredUser): PublicUser {
     const { passwordHash: _, ...publicUser } = user;
     return publicUser;
+}
+
+// ── SYNC wrappers (compatibilidade com código existente que chama sync) ────
+// Todas as funções mantêm a assinatura sync mas fazem fire-and-forget DB write
+// e usam cache local para leitura imediata.
+
+// Cache local — populado no startup pela migração/init
+let usersCache: StoredUser[] | null = null;
+
+function readUsers(): StoredUser[] {
+    if (usersCache) return [...usersCache];
+    // Fallback sync (primeira chamada antes do init)
+    const users = readUsersFromFile();
+    usersCache = users;
+    return [...users];
+}
+
+function writeUsers(users: StoredUser[]): void {
+    usersCache = [...users];
+    // Gravar no JSON (fallback/backup)
+    writeUsersToFile(users);
+    // Gravar no DB (async, fire-and-forget com log de erro)
+    if (useDb) {
+        // Upsert each user
+        Promise.all(users.map(u => dbSaveUser(u))).catch(err =>
+            console.error('[UserStore] Erro ao gravar no Table Storage:', err.message)
+        );
+    }
+}
+
+/**
+ * Inicializa o store: carrega dados do DB para cache e faz migração JSON→DB
+ */
+export async function initUserStore(): Promise<void> {
+    if (useDb) {
+        try {
+            const dbUsers = await dbGetAllUsers();
+            if (dbUsers.length > 0) {
+                usersCache = dbUsers;
+                console.log(`[UserStore] ${dbUsers.length} usuários carregados do Table Storage`);
+            } else {
+                // Migrar JSON existente para DB
+                const fileUsers = readUsersFromFile();
+                if (fileUsers.length > 0) {
+                    console.log(`[UserStore] Migrando ${fileUsers.length} usuários de JSON → Table Storage...`);
+                    for (const u of fileUsers) await dbSaveUser(u);
+                    usersCache = fileUsers;
+                    console.log('[UserStore] Migração concluída.');
+                } else {
+                    usersCache = [];
+                }
+            }
+        } catch (err: any) {
+            console.error('[UserStore] Fallback JSON — erro no Table Storage:', err.message);
+            usersCache = readUsersFromFile();
+        }
+    } else {
+        usersCache = readUsersFromFile();
+    }
 }
 
 /**
@@ -82,7 +184,6 @@ export function ensureDefaultAdmin(): void {
 export function registerUser(name: string, email: string, password: string): PublicUser {
     const users = readUsers();
 
-    // Verificar email duplicado
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
         throw new Error('Este email já está cadastrado');
     }
@@ -205,6 +306,14 @@ export function deleteUser(userId: string): void {
 
     users.splice(idx, 1);
     writeUsers(users);
+
+    // Remover do DB async
+    if (useDb) {
+        dbDeleteUser(userId).catch(err =>
+            console.error('[UserStore] Erro ao remover do Table Storage:', err.message)
+        );
+    }
+
     console.log(`[UserStore] Usuário ${userId} removido`);
 }
 
