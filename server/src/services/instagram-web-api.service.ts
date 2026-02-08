@@ -25,7 +25,7 @@ import type { SocialToken, PlatformMediaLimits } from '../types/social.types.js'
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+import { ProxyAgent as UndiciProxyAgent, type Dispatcher } from 'undici';
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 
@@ -135,7 +135,7 @@ export class InstagramWebAPI {
     private username: string | null = null;
     private isAuthenticated = false;
     private proxyUrl: string | null = null;
-    private proxyAgent: HttpsProxyAgent<string> | null = null;
+    private proxyAgent: UndiciProxyAgent | null = null;
 
     constructor() {
         // Configurar proxy via env se disponível
@@ -149,7 +149,7 @@ export class InstagramWebAPI {
 
     setProxy(proxyUrl: string): void {
         this.proxyUrl = proxyUrl;
-        this.proxyAgent = new HttpsProxyAgent(proxyUrl);
+        this.proxyAgent = new UndiciProxyAgent(proxyUrl);
         console.log(`[IG-Web] Proxy configurado: ${proxyUrl.substring(0, 40)}...`);
     }
 
@@ -223,7 +223,7 @@ export class InstagramWebAPI {
     private getFetchOptions(): RequestInit {
         const opts: RequestInit = {};
         if (this.proxyAgent) {
-            (opts as any).agent = this.proxyAgent;
+            (opts as any).dispatcher = this.proxyAgent;
         }
         return opts;
     }
