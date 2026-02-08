@@ -13,6 +13,7 @@ import accountRoutes from './routes/account.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import socialRoutes from './routes/social.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 import { ensureDefaultAdmin } from './services/user.store.js';
 import { socialQueue } from './services/social-queue.service.js';
 import { registerPublishHandler } from './services/social-publish.handler.js';
@@ -44,6 +45,7 @@ app.use('/api/account', accountRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Garantir admin padrão
 ensureDefaultAdmin();

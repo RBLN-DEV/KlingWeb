@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Share2,
-  Instagram,
-  Twitter,
   Plus,
   ArrowRight,
   Loader2,

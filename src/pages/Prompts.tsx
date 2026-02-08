@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Copy, 
@@ -6,21 +6,49 @@ import {
   Sparkles, 
   Search,
   ExternalLink,
-  Wand2
+  Wand2,
+  Plus,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { PROMPT_TEMPLATES, CATEGORIES } from '@/lib/prompts';
+import { CATEGORIES, getAllPrompts, addCustomPrompt, updateCustomPrompt, deleteCustomPrompt } from '@/lib/prompts';
 import type { PromptTemplate, PromptCategory } from '@/types';
+
+interface PromptFormData {
+  title: string;
+  description: string;
+  prompt: string;
+  category: PromptCategory;
+  tags: string;
+}
+
+const emptyForm: PromptFormData = {
+  title: '',
+  description: '',
+  prompt: '',
+  category: 'custom',
+  tags: '',
+};
 
 export function Prompts() {
   const navigate = useNavigate();
@@ -30,8 +58,19 @@ export function Prompts() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPrompt, setSelectedPrompt] = useState<PromptTemplate | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  
+  // CRUD state
+  const [allPrompts, setAllPrompts] = useState<PromptTemplate[]>(getAllPrompts());
+  const [showForm, setShowForm] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<PromptTemplate | null>(null);
+  const [formData, setFormData] = useState<PromptFormData>(emptyForm);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  const filteredPrompts = PROMPT_TEMPLATES.filter((prompt) => {
+  const refreshPrompts = useCallback(() => {
+    setAllPrompts(getAllPrompts());
+  }, []);
+
+  const filteredPrompts = allPrompts.filter((prompt) => {
     const matchesCategory = activeCategory === 'all' || prompt.category === activeCategory;
     const matchesSearch = 
       prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -63,6 +102,68 @@ export function Prompts() {
     navigate('/image', { state: { prompt: prompt.prompt } });
   };
 
+  // --- CRUD Handlers ---
+  const handleOpenCreate = () => {
+    setEditingPrompt(null);
+    setFormData(emptyForm);
+    setShowForm(true);
+  };
+
+  const handleOpenEdit = (prompt: PromptTemplate) => {
+    setEditingPrompt(prompt);
+    setFormData({
+      title: prompt.title,
+      description: prompt.description,
+      prompt: prompt.prompt,
+      category: prompt.category,
+      tags: prompt.tags.join(', '),
+    });
+    setShowForm(true);
+    setSelectedPrompt(null);
+  };
+
+  const handleSavePrompt = () => {
+    if (!formData.title.trim() || !formData.prompt.trim()) {
+      addToast({ type: 'error', title: 'Campos obrigatórios', message: 'Título e prompt são obrigatórios' });
+      return;
+    }
+
+    const tags = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
+
+    if (editingPrompt) {
+      updateCustomPrompt(editingPrompt.id, {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        prompt: formData.prompt.trim(),
+        category: formData.category,
+        tags,
+      });
+      addToast({ type: 'success', title: 'Prompt atualizado', message: 'Suas alterações foram salvas' });
+    } else {
+      addCustomPrompt({
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        prompt: formData.prompt.trim(),
+        category: formData.category,
+        tags,
+      });
+      addToast({ type: 'success', title: 'Prompt criado', message: 'Seu prompt customizado foi adicionado' });
+    }
+
+    setShowForm(false);
+    setEditingPrompt(null);
+    setFormData(emptyForm);
+    refreshPrompts();
+  };
+
+  const handleDeletePrompt = (id: string) => {
+    deleteCustomPrompt(id);
+    setShowDeleteConfirm(null);
+    setSelectedPrompt(null);
+    refreshPrompts();
+    addToast({ type: 'success', title: 'Prompt removido', message: 'O prompt foi excluído' });
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -71,8 +172,19 @@ export function Prompts() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-bold text-white">Biblioteca de Prompts</h1>
-        <p className="text-[#b0b0b0] mt-1">Explore prompts pré-configurados para gerar imagens incríveis</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Biblioteca de Prompts</h1>
+            <p className="text-[#b0b0b0] mt-1">Explore prompts pré-configurados ou crie os seus</p>
+          </div>
+          <Button
+            onClick={handleOpenCreate}
+            className="bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Prompt
+          </Button>
+        </div>
       </motion.div>
 
       {/* Search */}
@@ -151,19 +263,44 @@ export function Prompts() {
                     <Sparkles className="w-12 h-12 text-[#444444]" />
                   </div>
                 )}
+
+                {/* Custom badge */}
+                {prompt.isCustom && (
+                  <div className="absolute top-2 left-2 px-2 py-0.5 bg-[#7e57c2] rounded text-xs text-white font-medium">
+                    Customizado
+                  </div>
+                )}
                 
                 {/* Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUsePrompt(prompt);
-                    }}
-                    className="w-full py-2 bg-[#7e57c2] hover:bg-[#6a42b0] text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    <Wand2 className="w-4 h-4 inline mr-2" />
-                    Usar Prompt
-                  </button>
+                  <div className="w-full space-y-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUsePrompt(prompt);
+                      }}
+                      className="w-full py-2 bg-[#7e57c2] hover:bg-[#6a42b0] text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Wand2 className="w-4 h-4 inline mr-2" />
+                      Usar Prompt
+                    </button>
+                    {prompt.isCustom && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenEdit(prompt); }}
+                          className="flex-1 py-1.5 bg-[#444444] hover:bg-[#555] text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Pencil className="w-3 h-3" /> Editar
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(prompt.id); }}
+                          className="flex-1 py-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> Excluir
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -291,10 +428,144 @@ export function Prompts() {
                       <Copy className="w-4 h-4" />
                     )}
                   </Button>
+                  {selectedPrompt.isCustom && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleOpenEdit(selectedPrompt)}
+                        className="border-[#444444] text-white hover:bg-[#2a2a2a]"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowDeleteConfirm(selectedPrompt.id)}
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl bg-[#1a1a1a] border-[#444444] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {editingPrompt ? 'Editar Prompt' : 'Novo Prompt Customizado'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label className="text-white mb-2 block">Título *</Label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Ex: Retrato Artístico"
+                className="bg-[#2a2a2a] border-[#444444] text-white"
+              />
+            </div>
+
+            <div>
+              <Label className="text-white mb-2 block">Descrição</Label>
+              <Input
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Breve descrição do prompt"
+                className="bg-[#2a2a2a] border-[#444444] text-white"
+              />
+            </div>
+
+            <div>
+              <Label className="text-white mb-2 block">Prompt *</Label>
+              <Textarea
+                value={formData.prompt}
+                onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
+                placeholder="Escreva o prompt completo para geração de imagem..."
+                className="min-h-[200px] bg-[#2a2a2a] border-[#444444] text-white resize-none"
+              />
+            </div>
+
+            <div>
+              <Label className="text-white mb-2 block">Categoria</Label>
+              <Select
+                value={formData.category}
+                onValueChange={(v) => setFormData({ ...formData, category: v as PromptCategory })}
+              >
+                <SelectTrigger className="bg-[#2a2a2a] border-[#444444] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#2a2a2a] border-[#444444]">
+                  {CATEGORIES.filter(c => c.id !== 'all').map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id} className="text-white">
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-white mb-2 block">Tags (separadas por vírgula)</Label>
+              <Input
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                placeholder="retrato, artístico, feminino"
+                className="bg-[#2a2a2a] border-[#444444] text-white"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => { setShowForm(false); setEditingPrompt(null); }}
+                className="flex-1 border-[#444444] text-white hover:bg-[#2a2a2a]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSavePrompt}
+                className="flex-1 bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+              >
+                {editingPrompt ? 'Salvar Alterações' : 'Criar Prompt'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
+        <DialogContent className="max-w-sm bg-[#1a1a1a] border-[#444444]">
+          <DialogHeader>
+            <DialogTitle className="text-white">Excluir Prompt</DialogTitle>
+          </DialogHeader>
+          <p className="text-[#b0b0b0] mt-2">
+            Tem certeza que deseja excluir este prompt? Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(null)}
+              className="flex-1 border-[#444444] text-white hover:bg-[#2a2a2a]"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => showDeleteConfirm && handleDeletePrompt(showDeleteConfirm)}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

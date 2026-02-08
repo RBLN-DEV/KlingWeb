@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wand2, 
@@ -6,9 +6,10 @@ import {
   ArrowRight, 
   RefreshCw, 
   Image as ImageIcon,
-  Sparkles
+  Sparkles,
+  Search
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useGemini } from '@/hooks/useGemini';
 import { useToast } from '@/contexts/ToastContext';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { AspectRatio } from '@/types';
-import { PROMPT_TEMPLATES } from '@/lib/prompts';
+import { PROMPT_TEMPLATES, CATEGORIES } from '@/lib/prompts';
 
 const ASPECT_RATIOS: { value: AspectRatio; label: string; dimensions: string }[] = [
   { value: '16:9', label: 'Panorâmico (16:9)', dimensions: '1024×576' },
@@ -40,8 +41,13 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string; dimensions: string }[]
   { value: '3:4', label: 'Retrato (3:4)', dimensions: '768×1024' },
 ];
 
+interface LocationState {
+  prompt?: string;
+}
+
 export function ImageGeneration() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { generateImage, isGenerating, progress } = useGemini();
   const { addToast } = useToast();
   
@@ -51,6 +57,23 @@ export function ImageGeneration() {
   const [quality, setQuality] = useState<'standard' | 'high' | 'ultra'>('high');
   const [showTemplates, setShowTemplates] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [templateCategory, setTemplateCategory] = useState<string>('all');
+
+  // Recebe prompt enviado da página de Prompts via navigation state
+  useEffect(() => {
+    const state = location.state as LocationState;
+    if (state?.prompt) {
+      setPrompt(state.prompt);
+      // Limpa o state para não re-aplicar ao renavegar
+      window.history.replaceState({}, document.title);
+      addToast({
+        type: 'info',
+        title: 'Prompt carregado',
+        message: 'O prompt selecionado foi carregado com sucesso',
+      });
+    }
+  }, [location.state]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -79,10 +102,11 @@ export function ImageGeneration() {
         });
       }
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Não foi possível gerar a imagem';
       addToast({
         type: 'error',
         title: 'Erro na geração',
-        message: 'Não foi possível gerar a imagem',
+        message: errMsg,
       });
     }
   };
@@ -369,8 +393,47 @@ export function ImageGeneration() {
           <DialogHeader>
             <DialogTitle className="text-white">Prompts de Exemplo</DialogTitle>
           </DialogHeader>
+
+          {/* Search & Filter */}
+          <div className="space-y-3 mt-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#666]" />
+              <input
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                placeholder="Buscar prompts..."
+                className="w-full pl-9 pr-4 py-2 bg-[#2a2a2a] border border-[#444444] rounded-lg text-white text-sm placeholder:text-[#666] focus:outline-none focus:border-[#7e57c2]"
+              />
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setTemplateCategory(cat.id)}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
+                    templateCategory === cat.id
+                      ? 'bg-[#7e57c2] text-white'
+                      : 'bg-[#2a2a2a] text-[#b0b0b0] hover:bg-[#444444] border border-[#444444]'
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-            {PROMPT_TEMPLATES.slice(0, 6).map((template) => (
+            {PROMPT_TEMPLATES
+              .filter((t) => {
+                const matchCat = templateCategory === 'all' || t.category === templateCategory;
+                const matchSearch = !templateSearch || 
+                  t.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                  t.description.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                  t.tags.some(tag => tag.toLowerCase().includes(templateSearch.toLowerCase()));
+                return matchCat && matchSearch;
+              })
+              .map((template) => (
               <motion.button
                 key={template.id}
                 whileHover={{ scale: 1.02 }}
@@ -397,6 +460,17 @@ export function ImageGeneration() {
               </motion.button>
             ))}
           </div>
+
+          {PROMPT_TEMPLATES.filter((t) => {
+            const matchCat = templateCategory === 'all' || t.category === templateCategory;
+            const matchSearch = !templateSearch || 
+              t.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+              t.description.toLowerCase().includes(templateSearch.toLowerCase()) ||
+              t.tags.some(tag => tag.toLowerCase().includes(templateSearch.toLowerCase()));
+            return matchCat && matchSearch;
+          }).length === 0 && (
+            <p className="text-center text-[#b0b0b0] py-8">Nenhum prompt encontrado</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

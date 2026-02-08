@@ -1,0 +1,12 @@
+[
+  {
+    "id": "d3166484-75a3-4dc0-8f03-14ed4702c326",
+    "name": "Administrador",
+    "email": "admin@klingai.com",
+    "passwordHash": "95f7ad3def0db200dd4609ae4aa771741cff56a93debddf6443db3168ebfe4e2",
+    "role": "admin",
+    "status": "approved",
+    "createdAt": "2026-02-08T00:38:30.528Z",
+    "updatedAt": "2026-02-08T00:38:30.528Z"
+  }
+]

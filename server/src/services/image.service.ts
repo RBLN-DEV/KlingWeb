@@ -3,6 +3,18 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Import opcional do storage (pode não estar configurado)
+let storageService: any = null;
+try {
+    const { getStorageService } = require('./storage.service');
+    if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
+        storageService = getStorageService();
+        console.log('[ImageService] Azure Blob Storage disponível para persistência de imagens');
+    }
+} catch {
+    console.log('[ImageService] Azure Blob Storage não disponível, usando armazenamento local');
+}
+
 
 export interface ImageGenerationResult {
     imageUrl: string;
@@ -104,8 +116,23 @@ export class ImageService {
 
         console.log('[ImageService] Imagem Azure DALL-E gerada com sucesso');
 
+        let imageUrl = data.data[0].url;
+
+        // Persistir no Azure Blob Storage (DALL-E retorna URL temporária da Azure)
+        if (storageService) {
+            try {
+                const imgResponse = await fetch(imageUrl);
+                const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+                const blobName = `dalle/${uuidv4()}.png`;
+                imageUrl = await storageService.uploadImage(blobName, imgBuffer, 'image/png');
+                console.log(`[ImageService] DALL-E image persistida no Azure Blob: ${blobName}`);
+            } catch (uploadError: any) {
+                console.warn(`[ImageService] Usando URL original DALL-E (erro Blob): ${uploadError?.message}`);
+            }
+        }
+
         return {
-            imageUrl: data.data[0].url,
+            imageUrl,
             model: 'azure-dalle',
         };
     }
@@ -158,8 +185,20 @@ export class ImageService {
 
                                 console.log(`[ImageService] Imagem Gemini gerada com ${modelName}:`, filepath);
 
+                                // Tentar upload para Azure Blob Storage para persistência
+                                let persistentUrl = `/temp/${filename}`;
+                                if (storageService) {
+                                    try {
+                                        const blobName = `gemini/${filename}`;
+                                        persistentUrl = await storageService.uploadImage(blobName, buffer, 'image/png');
+                                        console.log(`[ImageService] Imagem persistida no Azure Blob: ${blobName}`);
+                                    } catch (uploadError: any) {
+                                        console.warn(`[ImageService] Fallback para URL local (erro Blob): ${uploadError?.message}`);
+                                    }
+                                }
+
                                 return {
-                                    imageUrl: `/temp/${filename}`,
+                                    imageUrl: persistentUrl,
                                     imageBase64: imageData,
                                     filePath: filepath,
                                     model: 'gemini',

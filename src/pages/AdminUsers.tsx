@@ -10,7 +10,6 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
-  MoreHorizontal,
   RefreshCw,
   UserCog,
   Mail,

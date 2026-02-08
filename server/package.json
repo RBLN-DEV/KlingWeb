@@ -26,6 +26,7 @@
         "dotenv": "^16.4.7",
         "express": "^4.21.2",
         "express-async-handler": "^1.2.0",
+        "https-proxy-agent": "^7.0.6",
         "image-size": "^2.0.2",
         "instagram-private-api": "^1.46.1",
         "jsonwebtoken": "^9.0.2",

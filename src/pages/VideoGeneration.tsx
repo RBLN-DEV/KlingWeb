@@ -54,6 +54,7 @@ export function VideoGeneration() {
     mode: 'standard',
   });
   const [generatedVideo, setGeneratedVideo] = useState<VideoGeneration | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [showGallery, setShowGallery] = useState(false);
   const [storedImages, setStoredImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,6 +146,7 @@ export function VideoGeneration() {
     }
 
     try {
+      setGenerationError(null);
       const result = await generateVideo({
         imageUrl: selectedImage,
         referenceVideo: referenceVideo || undefined,
@@ -159,11 +161,22 @@ export function VideoGeneration() {
         message: 'Seu vídeo foi criado com sucesso',
       });
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Não foi possível gerar o vídeo';
+      setGenerationError(errMsg);
       addToast({
         type: 'error',
         title: 'Erro na geração',
-        message: 'Não foi possível gerar o vídeo',
+        message: errMsg,
       });
+    }
+  };
+
+  const handleStepClick = (stepId: number) => {
+    // Só permitir ir para steps anteriores ou o atual +1 se os requisitos estão preenchidos
+    if (stepId < currentStep) {
+      setCurrentStep(stepId);
+    } else if (stepId === currentStep + 1 && canProceed()) {
+      setCurrentStep(stepId);
     }
   };
 
@@ -471,6 +484,38 @@ export function VideoGeneration() {
           </div>
           <p className="text-[#7e57c2] font-medium mt-2">{Math.round(progress)}%</p>
         </motion.div>
+      ) : generationError ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-[#2a2a2a] rounded-xl p-6 border border-red-500/30"
+        >
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+              <X className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-white font-medium text-lg">Erro ao gerar vídeo</h3>
+            <p className="text-red-400 text-sm mt-2">{generationError}</p>
+          </div>
+
+          <div className="flex gap-3 justify-center">
+            <Button
+              onClick={() => { setGenerationError(null); setCurrentStep(2); }}
+              variant="outline"
+              className="border-[#444444] text-white hover:bg-[#2a2a2a]"
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              Voltar e Ajustar
+            </Button>
+            <Button
+              onClick={() => { setGenerationError(null); handleGenerate(); }}
+              className="bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+            >
+              <Wand2 className="w-4 h-4 mr-2" />
+              Tentar Novamente
+            </Button>
+          </div>
+        </motion.div>
       ) : generatedVideo ? (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -591,10 +636,13 @@ export function VideoGeneration() {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
             const isCompleted = currentStep > step.id;
+            const isClickable = isCompleted || (step.id === currentStep + 1 && canProceed());
 
             return (
               <div key={step.id} className="flex items-center flex-1">
-                <motion.div
+                <motion.button
+                  onClick={() => handleStepClick(step.id)}
+                  disabled={!isClickable && !isActive}
                   animate={{
                     scale: isActive ? 1.1 : 1,
                     backgroundColor: isActive || isCompleted ? '#7e57c2' : '#2a2a2a',
@@ -603,7 +651,9 @@ export function VideoGeneration() {
                     'w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors',
                     isActive || isCompleted
                       ? 'border-[#7e57c2]'
-                      : 'border-[#444444]'
+                      : 'border-[#444444]',
+                    isClickable && !isActive ? 'cursor-pointer hover:border-[#7e57c2]/70' : '',
+                    !isClickable && !isActive ? 'cursor-default' : ''
                   )}
                 >
                   {isCompleted ? (
@@ -614,11 +664,15 @@ export function VideoGeneration() {
                       isActive ? 'text-white' : 'text-[#b0b0b0]'
                     )} />
                   )}
-                </motion.div>
-                <span className={cn(
-                  'ml-3 text-sm hidden sm:block',
-                  isActive ? 'text-white font-medium' : 'text-[#b0b0b0]'
-                )}>
+                </motion.button>
+                <span
+                  onClick={() => handleStepClick(step.id)}
+                  className={cn(
+                    'ml-3 text-sm hidden sm:block',
+                    isActive ? 'text-white font-medium' : 'text-[#b0b0b0]',
+                    isClickable ? 'cursor-pointer hover:text-white' : ''
+                  )}
+                >
                   {step.label}
                 </span>
                 {index < STEPS.length - 1 && (
@@ -649,7 +703,7 @@ export function VideoGeneration() {
       </AnimatePresence>
 
       {/* Navigation Buttons */}
-      {!generatedVideo && !isGenerating && currentStep < 3 && (
+      {!generatedVideo && !isGenerating && !generationError && currentStep < 3 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

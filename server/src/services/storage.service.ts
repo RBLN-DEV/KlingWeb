@@ -8,10 +8,13 @@ import {
 } from '@azure/storage-blob';
 
 const CONTAINER_NAME = 'temp-videos';
+const IMAGES_CONTAINER_NAME = 'generated-images';
 const SAS_EXPIRY_HOURS = 2; // URL válida por 2 horas
+const IMAGE_SAS_EXPIRY_HOURS = 24 * 7; // Imagens: URLs válidas por 7 dias
 
 export class StorageService {
     private containerClient: ContainerClient;
+    private imagesContainerClient: ContainerClient;
     private sharedKeyCredential: StorageSharedKeyCredential;
     private accountName: string;
 
@@ -37,8 +40,70 @@ export class StorageService {
 
         const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
         this.containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+        this.imagesContainerClient = blobServiceClient.getContainerClient(IMAGES_CONTAINER_NAME);
 
-        console.log(`[StorageService] Conectado ao container '${CONTAINER_NAME}' em '${this.accountName}'`);
+        console.log(`[StorageService] Conectado ao container '${CONTAINER_NAME}' e '${IMAGES_CONTAINER_NAME}' em '${this.accountName}'`);
+    }
+
+    /**
+     * Garante que o container de imagens existe
+     */
+    async ensureImagesContainer(): Promise<void> {
+        try {
+            await this.imagesContainerClient.createIfNotExists({ access: 'blob' });
+        } catch (error) {
+            console.warn('[StorageService] Aviso ao criar container de imagens:', error);
+        }
+    }
+
+    /**
+     * Faz upload de uma imagem para o Blob Storage (container de imagens)
+     * Retorna a URL pública com SAS token de longa duração
+     */
+    async uploadImage(
+        blobName: string,
+        buffer: Buffer,
+        contentType: string = 'image/png'
+    ): Promise<string> {
+        await this.ensureImagesContainer();
+        
+        const blockBlobClient = this.imagesContainerClient.getBlockBlobClient(blobName);
+
+        console.log(`[StorageService] Uploading image ${blobName} (${(buffer.length / 1024 / 1024).toFixed(2)}MB)...`);
+
+        await blockBlobClient.uploadData(buffer, {
+            blobHTTPHeaders: { blobContentType: contentType },
+        });
+
+        const sasUrl = this.generateImageSasUrl(blobName);
+
+        console.log(`[StorageService] Image upload concluído: ${blobName}`);
+        return sasUrl;
+    }
+
+    /**
+     * Gera URL com SAS token de longa duração para imagens
+     */
+    private generateImageSasUrl(blobName: string): string {
+        const startsOn = new Date();
+        startsOn.setMinutes(startsOn.getMinutes() - 5);
+
+        const expiresOn = new Date();
+        expiresOn.setHours(expiresOn.getHours() + IMAGE_SAS_EXPIRY_HOURS);
+
+        const sasToken = generateBlobSASQueryParameters(
+            {
+                containerName: IMAGES_CONTAINER_NAME,
+                blobName,
+                permissions: BlobSASPermissions.parse('r'),
+                startsOn,
+                expiresOn,
+                protocol: SASProtocol.HttpsAndHttp,
+            },
+            this.sharedKeyCredential
+        ).toString();
+
+        return `https://${this.accountName}.blob.core.windows.net/${IMAGES_CONTAINER_NAME}/${blobName}?${sasToken}`;
     }
 
     /**

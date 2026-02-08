@@ -19,12 +19,14 @@ import { StatsCard } from '@/components/ui-custom/StatsCard';
 import { VideoCard } from '@/components/ui-custom/VideoCard';
 import { Button } from '@/components/ui/button';
 import { useKling } from '@/hooks/useKling';
+import { useGemini } from '@/hooks/useGemini';
 import { AccountUsage } from '@/components/AccountUsage';
 import type { VideoGeneration, UserStats } from '@/types';
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { getStoredVideos } = useKling();
+  const { getStoredImages } = useGemini();
   const [videos, setVideos] = useState<VideoGeneration[]>([]);
   const [stats, setStats] = useState<UserStats>({
     totalVideos: 0,
@@ -36,20 +38,26 @@ export function Dashboard() {
 
   useEffect(() => {
     const storedVideos = getStoredVideos();
+    const storedImages = getStoredImages();
     setVideos(storedVideos.slice(0, 6));
     
     // Calculate stats from local data
     const completedVideos = storedVideos.filter(v => v.status === 'completed');
-    const totalDuration = completedVideos.reduce((acc, v) => acc + v.duration, 0);
+    const totalDuration = completedVideos.reduce((acc, v) => acc + (v.duration || 0), 0);
+    
+    // Calcular taxa de sucesso combinada (vídeos + imagens)
+    const totalAttempts = storedVideos.length + storedImages.length;
+    const completedImages = storedImages.filter((img: any) => img.status === 'completed');
+    const totalSuccess = completedVideos.length + completedImages.length;
     
     setStats(prev => ({
       ...prev,
       totalVideos: storedVideos.length,
-      totalImages: 0,
+      totalImages: storedImages.length,
       totalDuration,
-      successRate: storedVideos.length > 0 
-        ? Math.round((completedVideos.length / storedVideos.length) * 100) 
-        : 98,
+      successRate: totalAttempts > 0 
+        ? Math.round((totalSuccess / totalAttempts) * 100) 
+        : 100,
     }));
 
     // Fetch real credits from Kling API
@@ -59,8 +67,6 @@ export function Dashboard() {
         if (json.success && json.data?.data?.resource_pack_subscribe_infos) {
           const packs = json.data.data.resource_pack_subscribe_infos;
           const remaining = packs.reduce((sum: number, p: { remaining_quantity: number }) => sum + p.remaining_quantity, 0);
-          const total = packs.reduce((sum: number, p: { total_quantity: number }) => sum + p.total_quantity, 0);
-          const percent = total > 0 ? Math.round((remaining / total) * 100) : 0;
           setStats(prev => ({
             ...prev,
             creditsRemaining: remaining,
@@ -115,16 +121,22 @@ export function Dashboard() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatsCard
           title="Vídeos Gerados"
           value={stats.totalVideos}
           subtitle="Total de vídeos criados"
           icon={Video}
-          trend="up"
-          trendValue="+12%"
           color="purple"
           delay={0}
+        />
+        <StatsCard
+          title="Imagens Geradas"
+          value={stats.totalImages}
+          subtitle="Total de imagens criadas"
+          icon={Image}
+          color="blue"
+          delay={0.05}
         />
         <StatsCard
           title="Créditos Disponíveis"
@@ -132,7 +144,7 @@ export function Dashboard() {
           subtitle="Créditos para gerar vídeos"
           icon={Coins}
           trend="neutral"
-          color="blue"
+          color="green"
           delay={0.1}
         />
         <StatsCard
@@ -140,18 +152,16 @@ export function Dashboard() {
           value={`${Math.floor(stats.totalDuration / 60)}m ${stats.totalDuration % 60}s`}
           subtitle="Duração total dos vídeos"
           icon={Clock}
-          color="green"
-          delay={0.2}
+          color="orange"
+          delay={0.15}
         />
         <StatsCard
           title="Taxa de Sucesso"
           value={`${stats.successRate}%`}
-          subtitle="Vídeos gerados com sucesso"
+          subtitle="Gerações bem-sucedidas"
           icon={TrendingUp}
-          trend="up"
-          trendValue="+5%"
-          color="orange"
-          delay={0.3}
+          color="purple"
+          delay={0.2}
         />
       </div>
 

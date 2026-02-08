@@ -1,5 +1,71 @@
 import type { PromptTemplate } from '@/types';
 
+const STORAGE_KEY = 'klingai_custom_prompts';
+
+/**
+ * Carrega prompts customizados do localStorage
+ */
+export function getCustomPrompts(): PromptTemplate[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Salva prompts customizados no localStorage
+ */
+function saveCustomPrompts(prompts: PromptTemplate[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(prompts));
+}
+
+/**
+ * Adiciona um prompt customizado
+ */
+export function addCustomPrompt(prompt: Omit<PromptTemplate, 'id' | 'isCustom'>): PromptTemplate {
+  const customs = getCustomPrompts();
+  const newPrompt: PromptTemplate = {
+    ...prompt,
+    id: `custom_${Date.now()}`,
+    isCustom: true,
+  };
+  customs.unshift(newPrompt);
+  saveCustomPrompts(customs);
+  return newPrompt;
+}
+
+/**
+ * Atualiza um prompt customizado existente
+ */
+export function updateCustomPrompt(id: string, updates: Partial<PromptTemplate>): boolean {
+  const customs = getCustomPrompts();
+  const idx = customs.findIndex(p => p.id === id);
+  if (idx === -1) return false;
+  customs[idx] = { ...customs[idx], ...updates };
+  saveCustomPrompts(customs);
+  return true;
+}
+
+/**
+ * Remove um prompt customizado
+ */
+export function deleteCustomPrompt(id: string): boolean {
+  const customs = getCustomPrompts();
+  const filtered = customs.filter(p => p.id !== id);
+  if (filtered.length === customs.length) return false;
+  saveCustomPrompts(filtered);
+  return true;
+}
+
+/**
+ * Retorna todos os prompts (built-in + customizados)
+ */
+export function getAllPrompts(): PromptTemplate[] {
+  return [...getCustomPrompts(), ...PROMPT_TEMPLATES];
+}
+
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
   {
     id: '1',
@@ -466,12 +532,13 @@ Extreme photorealism, perfect anatomy, Netflix/HBO quality cinematography, no AI
 ];
 
 export const getPromptsByCategory = (category: string): PromptTemplate[] => {
-  if (category === 'all') return PROMPT_TEMPLATES;
-  return PROMPT_TEMPLATES.filter(p => p.category === category);
+  const all = getAllPrompts();
+  if (category === 'all') return all;
+  return all.filter(p => p.category === category);
 };
 
 export const getPromptById = (id: string): PromptTemplate | undefined => {
-  return PROMPT_TEMPLATES.find(p => p.id === id);
+  return getAllPrompts().find(p => p.id === id);
 };
 
 export const CATEGORIES = [

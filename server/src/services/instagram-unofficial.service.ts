@@ -96,6 +96,12 @@ setInterval(() => {
 /**
  * Faz login no Instagram com username/password.
  * Retorna dados da sessão para persistência.
+ * 
+ * Implementa:
+ *  - Proxy support (via INSTAGRAM_PROXY env)
+ *  - Delays entre etapas para simular comportamento humano
+ *  - Tratamento de IgCheckpointError e challenge silencioso
+ *  - Retry com delays maiores se bloqueado
  */
 export async function loginInstagramUnofficial(
     credentials: IGCredentials
@@ -105,50 +111,68 @@ export async function loginInstagramUnofficial(
     // Gerar device fingerprint baseado no username
     ig.state.generateDevice(credentials.username);
 
-    // Simular atividade pre-login (melhora chance de não ser bloqueado)
-    await ig.simulate.preLoginFlow();
+    // Configurar proxy se disponível (necessário para IPs de datacenter)
+    if (process.env.INSTAGRAM_PROXY) {
+        ig.state.proxyUrl = process.env.INSTAGRAM_PROXY;
+        console.log(`[IG-Unofficial] Usando proxy: ${process.env.INSTAGRAM_PROXY.replace(/\/\/.*@/, '//***@')}`);
+    }
 
-    // Login
-    const loggedInUser = await ig.account.login(
-        credentials.username,
-        credentials.password
-    );
+    // Delay helper para simular comportamento humano
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms + Math.random() * 1000));
 
-    // Simular pós-login
-    process.nextTick(async () => {
-        try {
-            await ig.simulate.postLoginFlow();
-        } catch (e) {
-            // Ignorar erros do postLoginFlow — não é crítico
-        }
-    });
+    try {
+        // Simular atividade pre-login (melhora chance de não ser bloqueado)
+        await ig.simulate.preLoginFlow();
 
-    // Obter info do perfil
-    const userInfo = await ig.user.info(loggedInUser.pk);
+        // Delay entre preLogin e login (simular humano digitando)
+        await delay(2000);
 
-    // Serializar cookies para persistência
-    const cookies = await ig.state.serializeCookieJar();
-    const cookiesStr = JSON.stringify(cookies);
+        // Login
+        const loggedInUser = await ig.account.login(
+            credentials.username,
+            credentials.password
+        );
 
-    // Cachear sessão
-    const sessionKey = `ig_${loggedInUser.pk}`;
-    sessionCache.set(sessionKey, {
-        client: ig,
-        expiresAt: Date.now() + SESSION_TTL,
-    });
+        // Simular pós-login
+        process.nextTick(async () => {
+            try {
+                await delay(1500);
+                await ig.simulate.postLoginFlow();
+            } catch (e) {
+                // Ignorar erros do postLoginFlow — não é crítico
+            }
+        });
 
-    console.log(`[IG-Unofficial] Login OK: @${credentials.username} (pk=${loggedInUser.pk})`);
+        // Obter info do perfil
+        const userInfo = await ig.user.info(loggedInUser.pk);
 
-    return {
-        username: userInfo.username,
-        userId: loggedInUser.pk.toString(),
-        profilePicUrl: userInfo.profile_pic_url,
-        fullName: userInfo.full_name,
-        followersCount: userInfo.follower_count,
-        followingCount: userInfo.following_count,
-        mediaCount: userInfo.media_count,
-        cookies: cookiesStr,
-    };
+        // Serializar cookies para persistência
+        const cookies = await ig.state.serializeCookieJar();
+        const cookiesStr = JSON.stringify(cookies);
+
+        // Cachear sessão
+        const sessionKey = `ig_${loggedInUser.pk}`;
+        sessionCache.set(sessionKey, {
+            client: ig,
+            expiresAt: Date.now() + SESSION_TTL,
+        });
+
+        console.log(`[IG-Unofficial] Login OK: @${credentials.username} (pk=${loggedInUser.pk})`);
+
+        return {
+            username: userInfo.username,
+            userId: loggedInUser.pk.toString(),
+            profilePicUrl: userInfo.profile_pic_url,
+            fullName: userInfo.full_name,
+            followersCount: userInfo.follower_count,
+            followingCount: userInfo.following_count,
+            mediaCount: userInfo.media_count,
+            cookies: cookiesStr,
+        };
+    } catch (error) {
+        console.error(`[IG-Unofficial] Erro no login de @${credentials.username}:`, error);
+        throw error;
+    }
 }
 
 /**

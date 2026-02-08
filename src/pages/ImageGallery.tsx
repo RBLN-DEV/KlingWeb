@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -13,6 +13,7 @@ import {
   Check,
   Sparkles,
   Palette,
+  Upload,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useGemini } from '@/hooks/useGemini';
@@ -46,6 +47,51 @@ export function ImageGallery() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [previewImage, setPreviewImage] = useState<ImageGeneration | null>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) {
+        addToast({ type: 'error', title: 'Arquivo inválido', message: `${file.name} não é uma imagem` });
+        return;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        addToast({ type: 'error', title: 'Arquivo muito grande', message: 'Máximo 20MB por imagem' });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const newImage: ImageGeneration = {
+          id: `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          prompt: `Upload: ${file.name}`,
+          imageUrl: dataUrl,
+          status: 'completed',
+          createdAt: new Date(),
+          model: 'upload',
+          aspectRatio: '1:1',
+          quality: 'standard',
+        };
+
+        // Salvar no localStorage
+        const saved = localStorage.getItem('klingai_images');
+        const allImages = saved ? JSON.parse(saved) : [];
+        allImages.unshift(newImage);
+        localStorage.setItem('klingai_images', JSON.stringify(allImages.slice(0, 50)));
+
+        setImages(prev => [newImage, ...prev]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    addToast({ type: 'success', title: 'Upload concluído', message: `${files.length} imagem(ns) adicionada(s)` });
+    // Reset input
+    if (uploadInputRef.current) uploadInputRef.current.value = '';
+  }, [addToast]);
 
   useEffect(() => {
     const stored = getStoredImages();
@@ -138,9 +184,34 @@ export function ImageGallery() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#7e57c2] to-[#e040fb] flex items-center justify-center">
             <Palette className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-white">Galeria de Imagens</h1>
             <p className="text-[#b0b0b0] mt-0.5">Todas as suas imagens geradas por IA</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => uploadInputRef.current?.click()}
+              className="border-[#444444] text-white hover:bg-[#2a2a2a]"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Upload
+            </Button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleUploadImage}
+              className="hidden"
+            />
+            <Button
+              onClick={() => navigate('/image')}
+              className="bg-[#7e57c2] hover:bg-[#6a42b0] text-white"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Gerar
+            </Button>
           </div>
         </div>
       </motion.div>

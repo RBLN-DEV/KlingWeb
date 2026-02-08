@@ -86,7 +86,30 @@ export function useGemini() {
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Erro ao gerar imagem');
+        // Extrair mensagem de erro específica da API
+        const apiError = result.error || result.message || 'Erro ao gerar imagem';
+        const errorCode = result.code || result.status;
+        
+        // Mapear erros comuns para mensagens amigáveis
+        let friendlyMessage = apiError;
+        if (apiError.includes('content_policy') || apiError.includes('content policy') || apiError.includes('safety')) {
+          friendlyMessage = 'O prompt foi bloqueado pela política de conteúdo. Tente reformular a descrição.';
+        } else if (apiError.includes('quota') || apiError.includes('rate limit') || apiError.includes('429')) {
+          friendlyMessage = 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.';
+        } else if (apiError.includes('timeout') || apiError.includes('TIMEOUT')) {
+          friendlyMessage = 'A geração demorou muito. Tente novamente com um prompt mais simples.';
+        } else if (apiError.includes('invalid') && apiError.includes('key')) {
+          friendlyMessage = 'Chave de API inválida. Verifique as configurações no painel de administração.';
+        } else if (apiError.includes('billing') || apiError.includes('payment')) {
+          friendlyMessage = 'Problema com faturamento da API. Verifique o plano de assinatura.';
+        } else if (errorCode === 503 || apiError.includes('unavailable')) {
+          friendlyMessage = 'Serviço de IA temporariamente indisponível. Tente novamente em instantes.';
+        }
+        
+        const error = new Error(friendlyMessage);
+        (error as any).code = errorCode;
+        (error as any).originalError = apiError;
+        throw error;
       }
 
       setProgress(100);
@@ -104,7 +127,14 @@ export function useGemini() {
 
       return generation;
     } catch (error) {
-      console.error('[useGemini] Erro:', error);
+      const err = error as Error & { code?: string; originalError?: string };
+      console.error('[useGemini] Erro:', {
+        message: err.message,
+        code: err.code,
+        originalError: err.originalError,
+        model: options.model,
+        promptLength: options.prompt.length,
+      });
       throw error;
     } finally {
       setIsGenerating(false);
