@@ -613,14 +613,14 @@ export function VideoGeneration() {
   );
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-bold text-white">Gerar Vídeo</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Gerar Vídeo</h1>
         <p className="text-[#b0b0b0] mt-1">Transforme imagens em vídeos com movimento realista</p>
       </motion.div>
 
@@ -648,7 +648,7 @@ export function VideoGeneration() {
                     backgroundColor: isActive || isCompleted ? '#7e57c2' : '#2a2a2a',
                   }}
                   className={cn(
-                    'w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors',
+                    'w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center border-2 transition-colors flex-shrink-0',
                     isActive || isCompleted
                       ? 'border-[#7e57c2]'
                       : 'border-[#444444]',
@@ -677,7 +677,7 @@ export function VideoGeneration() {
                 </span>
                 {index < STEPS.length - 1 && (
                   <div className={cn(
-                    'flex-1 h-0.5 mx-4',
+                    'flex-1 h-0.5 mx-2 sm:mx-4',
                     isCompleted ? 'bg-[#7e57c2]' : 'bg-[#444444]'
                   )} />
                 )}

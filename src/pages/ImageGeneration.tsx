@@ -132,14 +132,14 @@ export function ImageGeneration() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-bold text-white">Gerar Imagem</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Gerar Imagem</h1>
         <p className="text-[#b0b0b0] mt-1">Crie imagens hiper-realistas com Gemini ou DALL-E 3</p>
       </motion.div>
 

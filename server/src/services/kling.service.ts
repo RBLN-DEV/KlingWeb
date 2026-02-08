@@ -131,22 +131,85 @@ export class KlingService {
     }
 
     /**
-     * Converte URL para Base64 se necessário
+     * Converte URL para Base64 se necessário.
+     * Garante que o resultado é Base64 puro (sem prefixo data:) e válido.
      */
     private async ensureBase64(content: string): Promise<string> {
+        let base64: string;
+
         if (content.startsWith('http://') || content.startsWith('https://')) {
             console.log('[KlingService] Baixando imagem e convertendo para Base64...');
             const response = await fetch(content);
+
+            if (!response.ok) {
+                throw new Error(`Falha ao baixar imagem: HTTP ${response.status} ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type') || '';
+            console.log(`[KlingService] Content-Type da imagem: ${contentType}`);
+
             const arrayBuffer = await response.arrayBuffer();
-            return Buffer.from(arrayBuffer).toString('base64');
+            const buffer = Buffer.from(arrayBuffer);
+
+            if (buffer.length < 100) {
+                throw new Error(`Imagem muito pequena (${buffer.length} bytes), possivelmente URL inválida`);
+            }
+
+            // Detectar formato real pelo magic bytes
+            const header = buffer.subarray(0, 4);
+            let detectedType = '';
+            if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+                detectedType = 'image/jpeg';
+            } else if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+                detectedType = 'image/png';
+            } else if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) {
+                detectedType = 'image/gif';
+            } else if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46) {
+                detectedType = 'image/webp';
+            }
+
+            if (!detectedType && !contentType.startsWith('image/')) {
+                console.warn(`[KlingService] AVISO: Content-Type não é imagem (${contentType}), tentando de qualquer forma...`);
+            }
+
+            base64 = buffer.toString('base64');
+            console.log(`[KlingService] Imagem baixada: ${buffer.length} bytes → ${base64.length} chars Base64 (tipo: ${detectedType || contentType})`);
+
+        } else if (content.startsWith('data:')) {
+            // Data URI: extrair apenas o Base64 puro
+            const parts = content.split(',');
+            if (parts.length < 2 || !parts[1]) {
+                throw new Error('Data URI inválida: falta conteúdo Base64 após a vírgula');
+            }
+            base64 = parts[1];
+            console.log(`[KlingService] Data URI → Base64 puro (${base64.length} chars)`);
+        } else {
+            // Já é Base64 puro — limpar possíveis whitespaces/newlines
+            base64 = content;
         }
 
-        // Se já for Base64 ou data URL, retorna como está
-        if (content.startsWith('data:')) {
-            return content.split(',')[1] || content;
+        // Limpar caracteres inválidos do Base64 (whitespace, newlines)
+        base64 = base64.replace(/[\s\r\n]/g, '');
+
+        // Validar que o resultado é Base64 válido
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+            // Tentar corrigir: truncar em caracteres inválidos
+            const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
+            if (cleaned.length > 100) {
+                console.warn(`[KlingService] Base64 continha caracteres inválidos, limpando (${base64.length} → ${cleaned.length})`);
+                base64 = cleaned;
+            } else {
+                throw new Error('Conteúdo não é Base64 válido');
+            }
         }
 
-        return content;
+        // Garantir padding correto
+        const remainder = base64.length % 4;
+        if (remainder > 0) {
+            base64 += '='.repeat(4 - remainder);
+        }
+
+        return base64;
     }
 
     /**
@@ -162,9 +225,50 @@ export class KlingService {
 
         console.log('[KlingService] Iniciando Image-to-Video...');
 
-        const imageBase64 = await this.ensureBase64(imageInput);
+        // Se for URL pública, pode ser usada direto; senão converte para Base64
+        let payload: Record<string, unknown>;
 
-        const payload = {
+        if (imageInput.startsWith('http://') || imageInput.startsWith('https://')) {
+            // Tentar usar URL diretamente — a API Kling aceita image_url
+            // Verificar se a URL é acessível
+            try {
+                const headResp = await fetch(imageInput, { method: 'HEAD' });
+                if (headResp.ok) {
+                    console.log('[KlingService] Usando image como URL direta');
+                    payload = {
+                        model_name: 'kling-v1',
+                        image: imageInput,
+                        prompt,
+                        negative_prompt: negativePrompt,
+                        duration: String(genConfig.duration),
+                        aspect_ratio: genConfig.aspectRatio,
+                        mode: genConfig.mode,
+                        cfg_scale: genConfig.cfgScale,
+                    };
+
+                    try {
+                        const result = await this.makeRequest<KlingCreateTaskResponse>(
+                            'POST',
+                            '/v1/videos/image2video',
+                            payload
+                        );
+                        console.log('[KlingService] Task criada (URL):', result.data.task_id);
+                        return result.data.task_id;
+                    } catch (urlError: any) {
+                        console.warn(`[KlingService] URL direta falhou (${urlError.message}), tentando Base64...`);
+                        // Fallback: converter para Base64
+                    }
+                }
+            } catch {
+                console.warn('[KlingService] URL não acessível, convertendo para Base64...');
+            }
+        }
+
+        // Fallback ou input direto: converter para Base64
+        const imageBase64 = await this.ensureBase64(imageInput);
+        console.log(`[KlingService] Usando imagem Base64 (${imageBase64.length} chars)`);
+
+        payload = {
             model_name: 'kling-v1',
             image: imageBase64,
             prompt,
@@ -181,7 +285,7 @@ export class KlingService {
             payload
         );
 
-        console.log('[KlingService] Task criada:', result.data.task_id);
+        console.log('[KlingService] Task criada (Base64):', result.data.task_id);
         return result.data.task_id;
     }
 
@@ -215,9 +319,9 @@ export class KlingService {
             imageValue = imageInput;
             console.log(`[KlingService] Imagem como URL: ${imageInput.substring(0, 80)}...`);
         } else {
-            // É Base64 ou DataURI — converter para Base64 puro
+            // É Base64 ou DataURI — converter para Base64 puro e validado
             imageValue = await this.ensureBase64(imageInput);
-            console.log(`[KlingService] Imagem como Base64 (${imageValue.length} chars)`);
+            console.log(`[KlingService] Imagem como Base64 validado (${imageValue.length} chars)`);
         }
 
         const payload: Record<string, unknown> = {

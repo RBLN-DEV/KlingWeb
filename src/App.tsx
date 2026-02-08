@@ -18,6 +18,7 @@ import { Settings } from '@/pages/Settings';
 import { AdminUsers } from '@/pages/AdminUsers';
 import { SocialHub } from '@/pages/SocialHub';
 import { SocialDashboard } from '@/pages/SocialDashboard';
+import { BotDashboard } from '@/pages/BotDashboard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { cn } from '@/lib/utils';
 
@@ -94,16 +95,16 @@ function MainLayout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex">
+    <div className="min-h-screen min-h-[100dvh] bg-[#1a1a1a] flex overflow-x-hidden w-full">
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
       <main
         className={cn(
-          'flex-1 min-h-screen transition-all duration-300',
-          // Mobile: sem margin (sidebar é overlay)
-          'ml-0',
+          'flex-1 min-h-screen min-h-[100dvh] transition-all duration-300 w-full',
+          // Mobile: sem margin (sidebar é overlay), padding-top para o botão hamburger
+          'ml-0 pt-14 lg:pt-0',
           // Desktop: margin baseado no estado do sidebar
           isSidebarCollapsed ? 'lg:ml-[80px]' : 'lg:ml-[250px]'
         )}
@@ -115,7 +116,7 @@ function MainLayout() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="min-h-screen"
+            className="min-h-screen min-h-[100dvh] max-w-full overflow-x-hidden"
           >
             <Outlet />
           </motion.div>
@@ -148,6 +149,7 @@ function AppRoutes() {
           <Route path="/image-gallery" element={<ImageGallery />} />
           <Route path="/social-hub" element={<ErrorBoundary fallbackTitle="Erro no Social Hub" fallbackMessage="Não foi possível carregar a página de redes sociais."><SocialHub /></ErrorBoundary>} />
           <Route path="/social-dashboard" element={<ErrorBoundary fallbackTitle="Erro no Social Dashboard" fallbackMessage="Não foi possível carregar as métricas de redes sociais."><SocialDashboard /></ErrorBoundary>} />
+          <Route path="/bot" element={<ErrorBoundary fallbackTitle="Erro no Instagram Bot" fallbackMessage="Não foi possível carregar o painel do bot."><BotDashboard /></ErrorBoundary>} />
           <Route path="/prompts" element={<Prompts />} />
           <Route path="/settings" element={<Settings />} />
           

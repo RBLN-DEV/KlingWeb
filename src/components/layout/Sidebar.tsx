@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Share2,
   BarChart3,
+  Bot,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ const navItems = [
   { id: 'image-gallery', label: 'Minhas Imagens', icon: Palette, path: '/image-gallery' },
   { id: 'social-hub', label: 'Social Hub', icon: Share2, path: '/social-hub' },
   { id: 'social-dashboard', label: 'Social Métricas', icon: BarChart3, path: '/social-dashboard' },
+  { id: 'bot', label: 'Instagram Bot', icon: Bot, path: '/bot' },
   { id: 'prompts', label: 'Prompts', icon: FileText, path: '/prompts' },
   { id: 'settings', label: 'Configurações', icon: Settings, path: '/settings' },
 ];
@@ -46,6 +48,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     logout();
   };
 
+  // Fechar sidebar mobile ao mudar de rota
+  // (NavLink onClick já faz isso, mas garantir)
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -55,18 +60,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 bg-black/60 z-40 lg:hidden"
             onClick={() => setIsMobileOpen(false)}
           />
         )}
       </AnimatePresence>
 
-      {/* Mobile Toggle */}
+      {/* Mobile Toggle - botão fixo no topo */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed top-4 left-4 z-50 lg:hidden p-2 bg-[#2a2a2a] rounded-lg border border-[#444444]"
+        className="fixed top-3 left-3 z-50 lg:hidden p-2.5 bg-[#2a2a2a] rounded-lg border border-[#444444] shadow-lg active:scale-95 transition-transform"
+        aria-label="Menu"
       >
-        <Sparkles className="w-5 h-5 text-[#7e57c2]" />
+        {isMobileOpen ? (
+          <ChevronLeft className="w-5 h-5 text-[#7e57c2]" />
+        ) : (
+          <Sparkles className="w-5 h-5 text-[#7e57c2]" />
+        )}
       </button>
 
       {/* Sidebar */}
@@ -77,12 +87,14 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         className={cn(
-          'fixed left-0 top-0 h-full bg-[#1a1a1a] border-r border-[#444444] z-50',
+          'fixed left-0 top-0 h-full h-[100dvh] bg-[#1a1a1a] border-r border-[#444444] z-50',
           'flex flex-col',
           // Mobile: escondido por padrão, aparece quando isMobileOpen
           isMobileOpen ? 'translate-x-0' : '-translate-x-full',
           // Desktop: sempre visível
-          'lg:translate-x-0 lg:static'
+          'lg:translate-x-0 lg:static',
+          // Transição suave
+          'transition-transform duration-300 lg:transition-none'
         )}
       >
         {/* Logo */}
@@ -107,7 +119,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 space-y-1">
+        <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
