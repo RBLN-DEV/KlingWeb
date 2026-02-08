@@ -19,7 +19,11 @@ import {
 } from './database/social-token.repository.js';
 
 const TOKENS_FILE = path.join(DATA_DIR, 'social-tokens.json');
-const useDb = isTableStorageAvailable();
+
+// Avaliação lazy para dar tempo do env carregar
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // Cache local para leitura sync
 let tokensCache: SocialToken[] | null = null;
@@ -54,7 +58,7 @@ function readTokens(): SocialToken[] {
 function writeTokens(tokens: SocialToken[]): void {
     tokensCache = [...tokens];
     writeTokensToFile(tokens);
-    if (useDb) {
+    if (useDb()) {
         Promise.all(tokens.map(t => dbSaveToken(t))).catch(err =>
             console.error('[SocialTokenStore] Erro ao gravar no Table Storage:', err.message)
         );
@@ -65,7 +69,7 @@ function writeTokens(tokens: SocialToken[]): void {
  * Inicializa o store: carrega do DB ou migra JSON→DB
  */
 export async function initTokenStore(): Promise<void> {
-    if (useDb) {
+    if (useDb()) {
         try {
             const dbTokens = await dbGetAllTokens();
             if (dbTokens.length > 0) {
@@ -172,11 +176,26 @@ export function getTokenById(tokenId: string): SocialToken | null {
     const token = tokens.find(t => t.id === tokenId);
     if (!token) return null;
 
-    return {
-        ...token,
-        accessToken: decrypt(token.accessToken),
-        refreshToken: token.refreshToken ? decrypt(token.refreshToken) : undefined,
-    };
+    try {
+        return {
+            ...token,
+            accessToken: decrypt(token.accessToken),
+            refreshToken: token.refreshToken ? decrypt(token.refreshToken) : undefined,
+        };
+    } catch (err: any) {
+        console.error(`[SocialTokenStore] Erro ao descriptografar token ${tokenId}: ${err.message}`);
+        console.error('[SocialTokenStore] Isso geralmente indica que SOCIAL_ENCRYPTION_KEY mudou desde que o token foi salvo.');
+        console.error('[SocialTokenStore] O usuário precisará reconectar a conta social.');
+        // Retornar token com dados criptografados originais para que o erro
+        // seja capturado no momento do uso (ex: ao chamar API do Instagram)
+        // em vez de falhar silenciosamente aqui
+        return {
+            ...token,
+            accessToken: '__DECRYPT_FAILED__',
+            refreshToken: token.refreshToken ? '__DECRYPT_FAILED__' : undefined,
+            _decryptError: err.message,
+        } as SocialToken & { _decryptError?: string };
+    }
 }
 
 /**
@@ -305,11 +324,19 @@ export function getTokensNeedingRefresh(withinDays: number = 7): SocialToken[] {
             const expiresAt = new Date(t.tokenExpiresAt);
             return expiresAt <= threshold;
         })
-        .map(t => ({
-            ...t,
-            accessToken: decrypt(t.accessToken),
-            refreshToken: t.refreshToken ? decrypt(t.refreshToken) : undefined,
-        }));
+        .map(t => {
+            try {
+                return {
+                    ...t,
+                    accessToken: decrypt(t.accessToken),
+                    refreshToken: t.refreshToken ? decrypt(t.refreshToken) : undefined,
+                } as SocialToken;
+            } catch (err: any) {
+                console.error(`[SocialTokenStore] Erro ao descriptografar token ${t.id} para refresh: ${err.message}`);
+                return null;
+            }
+        })
+        .filter((t): t is SocialToken => t !== null);
 }
 
 /**

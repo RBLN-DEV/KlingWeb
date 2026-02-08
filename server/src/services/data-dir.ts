@@ -11,12 +11,35 @@ import path from 'path';
 
 /**
  * Retorna o diretório de dados persistente.
- * - Produção (Azure): /home/data
+ * - Produção (Azure): /home/data  (persistente com WEBSITES_ENABLE_APP_SERVICE_STORAGE=true)
  * - Dev: ./data (relativo ao CWD)
+ * - Docker sem /home: /app/data (fallback)
  */
 export function getDataDir(): string {
-    if (process.env.NODE_ENV === 'production' && fs.existsSync('/home')) {
-        return '/home/data';
+    // 1. Variável de ambiente explícita tem prioridade
+    if (process.env.DATA_DIR) {
+        return process.env.DATA_DIR;
+    }
+    // 2. Produção no Azure App Service: /home é o único volume persistente
+    if (process.env.NODE_ENV === 'production') {
+        // Verificar se /home existe e é gravável
+        if (fs.existsSync('/home')) {
+            try {
+                const testDir = '/home/data';
+                fs.mkdirSync(testDir, { recursive: true });
+                // Testar escrita
+                const testFile = path.join(testDir, '.write_test');
+                fs.writeFileSync(testFile, 'ok', 'utf-8');
+                fs.unlinkSync(testFile);
+                return testDir;
+            } catch (err: any) {
+                console.warn(`[DataDir] /home existe mas não é gravável: ${err.message}`);
+            }
+        }
+        // Fallback para /app/data em containers
+        if (fs.existsSync('/app')) {
+            return '/app/data';
+        }
     }
     return path.join(process.cwd(), 'data');
 }
@@ -28,8 +51,18 @@ export const DATA_DIR = getDataDir();
  */
 export function ensureDataDir(): void {
     if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        console.log(`[DataDir] Diretório criado: ${DATA_DIR}`);
+        try {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+            console.log(`[DataDir] Diretório criado: ${DATA_DIR}`);
+        } catch (err: any) {
+            console.error(`[DataDir] ERRO ao criar diretório ${DATA_DIR}: ${err.message}`);
+            // Tentar CWD como último fallback
+            const fallback = path.join(process.cwd(), 'data');
+            if (!fs.existsSync(fallback)) {
+                fs.mkdirSync(fallback, { recursive: true });
+            }
+            console.warn(`[DataDir] Usando fallback: ${fallback}`);
+        }
     }
 }
 

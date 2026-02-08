@@ -42,7 +42,9 @@ import {
 
 const METRICS_FILE = path.join(DATA_DIR, 'engagement-metrics.json');
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
-const useDb = isTableStorageAvailable();
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // ── Configuração de Polling ────────────────────────────────────────────────
 
@@ -98,7 +100,7 @@ function readMetrics(): EngagementSnapshot[] {
 function writeMetrics(metrics: EngagementSnapshot[]): void {
     writeMetricsToFile(metrics);
     // Gravar snapshots no Table Storage (async)
-    if (useDb) {
+    if (useDb()) {
         Promise.all(metrics.slice(-10).map(m => dbSaveSnapshot(m))).catch(err =>
             console.error('[Engagement] Erro ao gravar métricas no Table Storage:', err.message)
         );
@@ -111,7 +113,7 @@ function readPublications(): Publication[] {
 
 // Async versions for DB
 async function readMetricsAsync(): Promise<EngagementSnapshot[]> {
-    if (useDb) {
+    if (useDb()) {
         try { return await dbGetAllSnapshots(); }
         catch { return readMetricsFromFile(); }
     }
@@ -119,7 +121,7 @@ async function readMetricsAsync(): Promise<EngagementSnapshot[]> {
 }
 
 async function readPublicationsAsync(): Promise<Publication[]> {
-    if (useDb) {
+    if (useDb()) {
         try { return await dbGetAllPublications(); }
         catch { return readPublicationsFromFile(); }
     }
@@ -146,7 +148,7 @@ export class EngagementService {
      * Inicializa métricas: migra JSON → Table Storage se necessário
      */
     async initFromDb(): Promise<void> {
-        if (!useDb) return;
+        if (!useDb()) return;
         try {
             const dbMetrics = await dbGetAllSnapshots();
             if (dbMetrics.length === 0) {

@@ -49,9 +49,21 @@ async function handlePublishJob(job: QueueJob): Promise<void> {
     if (!token) {
         updatePublication(publicationId, {
             status: 'failed',
-            error: 'Token OAuth não encontrado ou expirado',
+            error: 'Token OAuth não encontrado ou expirado. Reconecte a conta social em Social Hub.',
         });
         throw new Error('OAuth token not found');
+    }
+
+    // Verificar se houve erro de descriptografia
+    if (token.accessToken === '__DECRYPT_FAILED__' || (token as any)._decryptError) {
+        const errMsg = (token as any)._decryptError || 'Chave de criptografia mudou';
+        updatePublication(publicationId, {
+            status: 'failed',
+            error: `Erro ao descriptografar token OAuth: ${errMsg}. ` +
+                'A chave de criptografia (SOCIAL_ENCRYPTION_KEY) provavelmente mudou. ' +
+                'Reconecte a conta social em Social Hub para gerar novos tokens.',
+        });
+        throw new Error(`Decrypt failed for token ${tokenId}: ${errMsg}`);
     }
 
     // 2. Get publication

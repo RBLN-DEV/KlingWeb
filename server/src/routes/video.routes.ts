@@ -47,11 +47,13 @@ const uploadVideo = multer({
 
 // Store de tarefas — com persistência em Table Storage + fallback in-memory
 const tasksStore = new Map<string, VideoGenerationResponse>();
-const useDb = isTableStorageAvailable();
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // Persistir tarefa no DB (async, fire-and-forget)
 function persistTask(task: VideoGenerationResponse): void {
-    if (useDb) {
+    if (useDb()) {
         const record: VideoTaskRecord = {
             id: task.id,
             taskId: task.taskId || '',
@@ -75,7 +77,7 @@ function persistTask(task: VideoGenerationResponse): void {
  * Inicializa tarefas do Table Storage (carrega para o Map in-memory)
  */
 export async function initVideoTasksStore(): Promise<void> {
-    if (!useDb) return;
+    if (!useDb()) return;
     try {
         const tasks = await dbGetAllVideoTasks();
         for (const t of tasks) {
@@ -351,7 +353,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
 
     if (tasksStore.has(id)) {
         tasksStore.delete(id);
-        if (useDb) {
+        if (useDb()) {
             dbDeleteVideoTask(id).catch(() => {});
         }
         res.json({

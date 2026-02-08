@@ -24,7 +24,11 @@ export interface StoredUser {
 export type PublicUser = Omit<StoredUser, 'passwordHash'>;
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const useDb = isTableStorageAvailable();
+
+// Avaliação lazy para dar tempo do env carregar
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // Admin padrão — criado automaticamente se nenhum admin existir
 const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@klingai.com';
@@ -52,24 +56,24 @@ function writeUsersToFile(users: StoredUser[]): void {
 // ── Hybrid helpers (Table Storage ou JSON) ─────────────────────────────────
 
 async function readUsersAsync(): Promise<StoredUser[]> {
-    if (useDb) return dbGetAllUsers();
+    if (useDb()) return dbGetAllUsers();
     return readUsersFromFile();
 }
 
 async function findUserByEmailAsync(email: string): Promise<StoredUser | null> {
-    if (useDb) return dbGetUserByEmail(email);
+    if (useDb()) return dbGetUserByEmail(email);
     const users = readUsersFromFile();
     return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
 }
 
 async function findUserByIdAsync(id: string): Promise<StoredUser | null> {
-    if (useDb) return dbGetUserById(id);
+    if (useDb()) return dbGetUserById(id);
     const users = readUsersFromFile();
     return users.find(u => u.id === id) || null;
 }
 
 async function saveUserAsync(user: StoredUser): Promise<void> {
-    if (useDb) {
+    if (useDb()) {
         await dbSaveUser(user);
         return;
     }
@@ -80,7 +84,7 @@ async function saveUserAsync(user: StoredUser): Promise<void> {
 }
 
 async function removeUserAsync(userId: string): Promise<void> {
-    if (useDb) {
+    if (useDb()) {
         await dbDeleteUser(userId);
         return;
     }
@@ -114,7 +118,7 @@ function writeUsers(users: StoredUser[]): void {
     // Gravar no JSON (fallback/backup)
     writeUsersToFile(users);
     // Gravar no DB (async, fire-and-forget com log de erro)
-    if (useDb) {
+    if (useDb()) {
         // Upsert each user
         Promise.all(users.map(u => dbSaveUser(u))).catch(err =>
             console.error('[UserStore] Erro ao gravar no Table Storage:', err.message)
@@ -126,7 +130,7 @@ function writeUsers(users: StoredUser[]): void {
  * Inicializa o store: carrega dados do DB para cache e faz migração JSON→DB
  */
 export async function initUserStore(): Promise<void> {
-    if (useDb) {
+    if (useDb()) {
         try {
             const dbUsers = await dbGetAllUsers();
             if (dbUsers.length > 0) {
@@ -308,7 +312,7 @@ export function deleteUser(userId: string): void {
     writeUsers(users);
 
     // Remover do DB async
-    if (useDb) {
+    if (useDb()) {
         dbDeleteUser(userId).catch(err =>
             console.error('[UserStore] Erro ao remover do Table Storage:', err.message)
         );

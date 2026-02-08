@@ -27,7 +27,9 @@ import {
 } from '../services/database/publication.repository.js';
 
 const PUBLICATIONS_FILE = path.join(DATA_DIR, 'publications.json');
-const useDb = isTableStorageAvailable();
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // Cache local para leitura sync
 let pubsCache: Publication[] | null = null;
@@ -58,7 +60,7 @@ function writePublications(pubs: Publication[]): void {
     pubsCache = [...pubs];
     writePublicationsToFile(pubs);
     // Gravar no Table Storage (async)
-    if (useDb) {
+    if (useDb()) {
         const recent = pubs.slice(-20);
         Promise.all(recent.map(p => dbSavePublication(p))).catch(err =>
             console.error('[SocialPublish] Erro ao gravar no Table Storage:', err.message)
@@ -84,7 +86,7 @@ export function updatePublication(id: string, updates: Partial<Publication>): Pu
  * Inicializa publications: carrega do DB ou migra JSON→DB
  */
 export async function initPublicationsStore(): Promise<void> {
-    if (useDb) {
+    if (useDb()) {
         try {
             const dbPubs = await dbGetAllPublications();
             if (dbPubs.length > 0) {

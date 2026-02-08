@@ -57,22 +57,63 @@ export function encrypt(plaintext: string): string {
  * @param encryptedText String no formato iv_hex:authTag_hex:ciphertext_hex
  */
 export function decrypt(encryptedText: string): string {
+    if (!encryptedText || typeof encryptedText !== 'string') {
+        throw new Error('Texto criptografado vazio ou inválido');
+    }
+
+    // Se o texto não parece criptografado, pode ser um token em texto puro (legado)
     const parts = encryptedText.split(':');
     if (parts.length !== 3) {
-        throw new Error('Formato de texto criptografado inválido');
+        // Verificar se pode ser um token OAuth em texto puro (não criptografado)
+        // Tokens Facebook/Instagram começam com 'EAA' ou são alfanuméricos longos
+        if (encryptedText.startsWith('EAA') || (encryptedText.length > 20 && !encryptedText.includes(' '))) {
+            console.warn('[Crypto] Token aparenta estar em texto puro (não criptografado). Retornando como está.');
+            return encryptedText;
+        }
+        throw new Error(`Formato de texto criptografado inválido (${parts.length} partes, esperado 3). ` +
+            'Isso pode ocorrer se a chave de criptografia (SOCIAL_ENCRYPTION_KEY) mudou entre deploys. ' +
+            'Reconecte a conta social para gerar novos tokens.');
     }
 
     const [ivHex, authTagHex, ciphertext] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey, iv);
-    decipher.setAuthTag(authTag);
+    // Validar formato hex dos componentes
+    if (ivHex.length !== IV_LENGTH * 2 || authTagHex.length !== TAG_LENGTH * 2) {
+        throw new Error(`Formato de texto criptografado inválido (iv=${ivHex.length}, tag=${authTagHex.length}). ` +
+            'A chave de criptografia pode ter mudado. Reconecte a conta social.');
+    }
 
-    let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+    try {
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
 
-    return decrypted;
+        const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey, iv);
+        decipher.setAuthTag(authTag);
+
+        let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        return decrypted;
+    } catch (err: any) {
+        if (err.message?.includes('Unsupported state') || err.code === 'ERR_OSSL_EVP_BAD_DECRYPT') {
+            throw new Error('Falha na descriptografia: a chave de criptografia (SOCIAL_ENCRYPTION_KEY) provavelmente ' +
+                'mudou desde que o token foi salvo. Reconecte a conta social para gerar novos tokens.');
+        }
+        throw err;
+    }
+}
+
+/**
+ * Tenta descriptografar, retornando null em caso de erro (sem throw).
+ * Útil para migração e leitura tolerante a falhas.
+ */
+export function tryDecrypt(encryptedText: string): string | null {
+    try {
+        return decrypt(encryptedText);
+    } catch (err: any) {
+        console.warn('[Crypto] tryDecrypt falhou:', err.message);
+        return null;
+    }
 }
 
 /**

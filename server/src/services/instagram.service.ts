@@ -230,7 +230,13 @@ export async function refreshInstagramToken(token: SocialToken): Promise<{
     accessToken: string;
     tokenExpiresAt: string;
 }> {
-    const currentToken = decrypt(token.accessToken);
+    let currentToken: string;
+    try {
+        currentToken = decrypt(token.accessToken);
+    } catch (err: any) {
+        console.error('[Instagram] Erro ao descriptografar token para refresh:', err.message);
+        throw new Error('Token criptografado inválido. A chave de criptografia pode ter mudado. Reconecte a conta Instagram.');
+    }
 
     const params = new URLSearchParams({
         grant_type: 'fb_exchange_token',
@@ -239,8 +245,42 @@ export async function refreshInstagramToken(token: SocialToken): Promise<{
         fb_exchange_token: currentToken,
     });
 
-    const response = await fetch(`${GRAPH_API_BASE}/oauth/access_token?${params.toString()}`);
-    const data = await response.json() as any;
+    const url = `${GRAPH_API_BASE}/oauth/access_token?${params.toString()}`;
+
+    // Tentar refresh — se falhar por certificado de proxy, tentar sem proxy
+    let response: Response;
+    try {
+        response = await fetch(url);
+    } catch (err: any) {
+        const isCertError = err.message?.includes('certificate has expired')
+            || err.message?.includes('CERT_HAS_EXPIRED')
+            || err.message?.includes('tunneling socket')
+            || err.message?.includes('unable to verify')
+            || err.message?.includes('self signed certificate')
+            || err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE';
+
+        if (isCertError) {
+            console.warn('[Instagram] Erro de certificado no proxy ao renovar token. Tentando sem proxy...');
+            // Tentar sem proxy: usar um fetch direto sem variáveis de ambiente de proxy
+            try {
+                const directFetchOpts: RequestInit = {};
+                // undici respeita env vars, então precisamos de um agent sem proxy
+                const { Agent } = await import('undici');
+                const directAgent = new Agent({ connect: { rejectUnauthorized: true } });
+                response = await fetch(url, { dispatcher: directAgent as any } as any);
+            } catch (retryErr: any) {
+                console.error('[Instagram] Retry sem proxy também falhou:', retryErr.message);
+                throw new Error(
+                    'Erro ao renovar token: o certificado do proxy expirou e a conexão direta também falhou. ' +
+                    'Verifique a configuração do proxy em Configurações ou reconecte a conta Instagram.'
+                );
+            }
+        } else {
+            throw new Error(`Erro de rede ao renovar token Instagram: ${err.message}`);
+        }
+    }
+
+    const data = await response!.json() as any;
 
     if (data.error) {
         throw new Error(`Erro ao renovar token Instagram: ${data.error.message}`);
@@ -261,21 +301,44 @@ export async function refreshInstagramToken(token: SocialToken): Promise<{
 
 /**
  * Publica uma imagem no Instagram
- * Fluxo: Create Container → Publish
+ * Fluxo: Validar URL → Create Container → Poll Status → Publish
  */
 export async function publishInstagramImage(
     token: SocialToken,
     imageUrl: string,
     caption: string
 ): Promise<{ postId: string; postUrl: string }> {
-    const accessToken = decrypt(token.accessToken);
+    let accessToken: string;
+    try {
+        accessToken = decrypt(token.accessToken);
+    } catch (err: any) {
+        throw new Error(`Erro ao descriptografar token: ${err.message}. Reconecte a conta Instagram.`);
+    }
+
     const igUserId = token.metadata.instagramBusinessAccountId;
 
     if (!igUserId) {
         throw new Error('Instagram Business Account ID não encontrado no token');
     }
 
+    // Etapa 0: Verificar se a URL da imagem é acessível publicamente
+    console.log(`[Instagram] Verificando acessibilidade da imagem: ${imageUrl.substring(0, 100)}...`);
+    try {
+        const headResp = await fetch(imageUrl, { method: 'HEAD' });
+        if (!headResp.ok) {
+            throw new Error(
+                `A URL da imagem retornou HTTP ${headResp.status}. ` +
+                'A Meta Graph API requer que a imagem esteja acessível publicamente via HTTPS. ' +
+                'Verifique se a URL não expirou (SAS token) e se está acessível externamente.'
+            );
+        }
+    } catch (err: any) {
+        if (err.message?.includes('A URL da imagem retornou')) throw err;
+        console.warn(`[Instagram] Não foi possível verificar URL da imagem (${err.message}), tentando publicar assim mesmo...`);
+    }
+
     // Etapa 1: Criar container de mídia
+    console.log(`[Instagram] Criando container para IG userId=${igUserId}...`);
     const containerResponse = await fetch(`${GRAPH_API_BASE}/${igUserId}/media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,12 +351,68 @@ export async function publishInstagramImage(
 
     const containerData = await containerResponse.json() as any;
     if (containerData.error) {
-        throw new Error(`Erro ao criar container IG: ${containerData.error.message}`);
+        const errMsg = containerData.error.message || 'Erro desconhecido';
+        const errCode = containerData.error.code;
+        // Código 36003 = URL da mídia não acessível
+        if (errCode === 36003 || errMsg.includes('media url')) {
+            throw new Error(
+                `Erro ao criar container IG: a URL da imagem não é acessível pela Meta. ` +
+                `Certifique-se de que a imagem está hospedada em URL pública HTTPS. Detalhe: ${errMsg}`
+            );
+        }
+        throw new Error(`Erro ao criar container IG: ${errMsg}`);
     }
 
     const containerId = containerData.id;
+    if (!containerId) {
+        throw new Error('Container criado mas sem ID retornado. Resposta inesperada da API Meta.');
+    }
 
-    // Etapa 2: Publicar (imagens não precisam de polling — são processadas instantaneamente)
+    console.log(`[Instagram] Container criado: ${containerId}. Aguardando processamento...`);
+
+    // Etapa 1.5: Poll do status do container (imagens também podem demorar)
+    let containerReady = false;
+    for (let i = 0; i < 12; i++) { // Máximo 60s (5s * 12)
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        try {
+            const statusResponse = await fetch(
+                `${GRAPH_API_BASE}/${containerId}?fields=status_code,status&access_token=${accessToken}`
+            );
+            const statusData = await statusResponse.json() as any;
+
+            if (statusData.status_code === 'FINISHED') {
+                containerReady = true;
+                break;
+            }
+            if (statusData.status_code === 'ERROR') {
+                const errorStatus = statusData.status || 'desconhecido';
+                throw new Error(
+                    `Container de mídia falhou no processamento do Instagram. ` +
+                    `Status: ${errorStatus}. Possível causa: imagem não acessível, formato inválido ou URL expirada.`
+                );
+            }
+            if (statusData.status_code === 'IN_PROGRESS') {
+                console.log(`[Instagram] Container ${containerId}: processando... (${i + 1}/12)`);
+                continue;
+            }
+            // Se não tem status_code, pode já estar pronto (imagens são rápidas)
+            if (!statusData.status_code) {
+                containerReady = true;
+                break;
+            }
+        } catch (err: any) {
+            if (err.message?.includes('Container de mídia falhou')) throw err;
+            console.warn(`[Instagram] Erro ao verificar status do container: ${err.message}`);
+        }
+    }
+
+    if (!containerReady) {
+        console.warn('[Instagram] Timeout aguardando container, tentando publicar assim mesmo...');
+    }
+
+    // Etapa 2: Publicar
+    console.log(`[Instagram] Publicando container ${containerId}...`);
     const publishResponse = await fetch(`${GRAPH_API_BASE}/${igUserId}/media_publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,11 +424,19 @@ export async function publishInstagramImage(
 
     const publishData = await publishResponse.json() as any;
     if (publishData.error) {
-        throw new Error(`Erro ao publicar no IG: ${publishData.error.message}`);
+        const errMsg = publishData.error.message || 'Erro desconhecido';
+        throw new Error(`Erro ao publicar no IG: ${errMsg}`);
     }
 
     const postId = publishData.id;
-    const postUrl = `https://www.instagram.com/p/${postId}/`; // Aproximação — permalink real requer outra chamada
+    if (!postId) {
+        throw new Error(
+            'Publicação retornou sem ID. Isso geralmente indica que o container ainda não foi processado ' +
+            'ou que a URL da mídia não é acessível pelo Instagram. Verifique se a imagem está hospedada em URL pública HTTPS.'
+        );
+    }
+
+    let postUrl = `https://www.instagram.com/p/${postId}/`;
 
     // Obter permalink real
     try {
@@ -318,13 +445,13 @@ export async function publishInstagramImage(
         );
         const permalinkData = await permalinkResponse.json() as any;
         if (permalinkData.permalink) {
-            return { postId, postUrl: permalinkData.permalink };
+            postUrl = permalinkData.permalink;
         }
     } catch {
         // Usar URL aproximada
     }
 
-    console.log(`[Instagram] Imagem publicada: ${postId}`);
+    console.log(`[Instagram] ✅ Imagem publicada com sucesso: ${postId} → ${postUrl}`);
     return { postId, postUrl };
 }
 
@@ -338,11 +465,32 @@ export async function publishInstagramVideo(
     caption: string,
     isReel: boolean = false
 ): Promise<{ postId: string; postUrl: string }> {
-    const accessToken = decrypt(token.accessToken);
+    let accessToken: string;
+    try {
+        accessToken = decrypt(token.accessToken);
+    } catch (err: any) {
+        throw new Error(`Erro ao descriptografar token: ${err.message}. Reconecte a conta Instagram.`);
+    }
+
     const igUserId = token.metadata.instagramBusinessAccountId;
 
     if (!igUserId) {
         throw new Error('Instagram Business Account ID não encontrado no token');
+    }
+
+    // Verificar acessibilidade do vídeo
+    console.log(`[Instagram] Verificando acessibilidade do vídeo: ${videoUrl.substring(0, 100)}...`);
+    try {
+        const headResp = await fetch(videoUrl, { method: 'HEAD' });
+        if (!headResp.ok) {
+            throw new Error(
+                `A URL do vídeo retornou HTTP ${headResp.status}. ` +
+                'A Meta Graph API requer que o vídeo esteja acessível publicamente via HTTPS.'
+            );
+        }
+    } catch (err: any) {
+        if (err.message?.includes('A URL do vídeo retornou')) throw err;
+        console.warn(`[Instagram] Não foi possível verificar URL do vídeo: ${err.message}`);
     }
 
     // Etapa 1: Criar container de vídeo

@@ -194,6 +194,25 @@ app.listen(PORT, () => {
     console.log(`  - Kling API: ${process.env.KLING_ACCESS_KEY ? '✅' : '❌'}`);
     console.log(`  - Gemini:    ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
     console.log(`  - Azure DALL-E: ${process.env.AZURE_DALLE_KEY ? '✅' : '❌'}`);
+
+    // ── Warnings de configuração ───────────────────────────────────
+    if (!process.env.SOCIAL_ENCRYPTION_KEY) {
+        console.warn('[Server] ⚠️  SOCIAL_ENCRYPTION_KEY não definida! Usando chave derivada do SESSION_SECRET.');
+        console.warn('[Server]    Se o SESSION_SECRET mudar, tokens OAuth existentes ficarão ilegíveis.');
+        console.warn('[Server]    Defina SOCIAL_ENCRYPTION_KEY=<64 chars hex> para persistência segura.');
+    }
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'klingai_session_secret_2025') {
+        console.warn('[Server] ⚠️  SESSION_SECRET está usando valor padrão! Defina um valor seguro em produção.');
+    }
+    if (process.env.HTTPS_PROXY || process.env.INSTAGRAM_PROXY) {
+        const proxyUrl = process.env.HTTPS_PROXY || process.env.INSTAGRAM_PROXY;
+        console.log(`[Server] 🌐 Proxy configurado: ${proxyUrl?.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}`);
+        console.log('[Server]    Se ocorrerem erros de certificado, verifique se o proxy está válido.');
+    }
+    if (!isTableStorageAvailable()) {
+        console.warn('[Server] ⚠️  Azure Table Storage não configurado. Dados serão salvos em JSON local.');
+        console.warn('[Server]    Em produção, defina AZURE_STORAGE_CONNECTION_STRING para persistência confiável.');
+    }
 });
 
 export default app;

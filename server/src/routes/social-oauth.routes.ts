@@ -270,7 +270,23 @@ router.post('/connections/:id/refresh', asyncHandler(async (req: Request, res: R
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro ao renovar token';
-        res.status(400).json({ success: false, error: msg });
+        // Detectar erros específicos para retornar códigos adequados
+        const isCertError = msg.includes('certificado') || msg.includes('certificate') || msg.includes('proxy');
+        const isDecryptError = msg.includes('descriptografar') || msg.includes('criptografia') || msg.includes('Reconecte');
+
+        const statusCode = isDecryptError ? 422 : (isCertError ? 502 : 400);
+        const code = isDecryptError ? 'DECRYPT_ERROR' : (isCertError ? 'PROXY_CERT_ERROR' : 'REFRESH_ERROR');
+
+        res.status(statusCode).json({
+            success: false,
+            error: msg,
+            code,
+            hint: isDecryptError
+                ? 'Desconecte e reconecte a conta social para gerar novos tokens.'
+                : (isCertError
+                    ? 'Verifique a configuração do proxy em Configurações. O certificado pode ter expirado.'
+                    : undefined),
+        });
     }
 }));
 

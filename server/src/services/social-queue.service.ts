@@ -26,7 +26,9 @@ import {
 } from './database/queue.repository.js';
 
 const QUEUE_FILE = path.join(DATA_DIR, 'social-queue.json');
-const useDb = isTableStorageAvailable();
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // ── Tipos de handler ───────────────────────────────────────────────────────
 
@@ -294,7 +296,7 @@ export class SocialQueueService {
         }
 
         // Gravar no Table Storage (async)
-        if (useDb) {
+        if (useDb()) {
             Promise.all(this.queue.map(j => dbSaveJob(j))).catch(err =>
                 console.error('[SocialQueue] Erro ao gravar no Table Storage:', err.message)
             );
@@ -341,7 +343,7 @@ export class SocialQueueService {
      * Inicializa a fila a partir do Table Storage (migração JSON→DB)
      */
     async initFromDb(): Promise<void> {
-        if (!useDb) return;
+        if (!useDb()) return;
         try {
             const dbJobs = await dbGetAllJobs();
             if (dbJobs.length > 0) {

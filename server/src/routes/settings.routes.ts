@@ -51,7 +51,9 @@ import {
     dbGetProxyConfig, dbSaveProxyConfig, type ProxyConfig as DbProxyConfig,
 } from '../services/database/settings.repository.js';
 
-const useDb = isTableStorageAvailable();
+function useDb(): boolean {
+    return isTableStorageAvailable();
+}
 
 // ── Persistência de Proxy em disco ──────────────────────────────────────────
 
@@ -84,7 +86,7 @@ function loadProxyConfig(): ProxyConfig | null {
 function saveProxyConfig(config: ProxyConfig): void {
     saveProxyConfigToFile(config);
     // Salvar no Table Storage (async)
-    if (useDb) {
+    if (useDb()) {
         dbSaveProxyConfig(config).catch(err =>
             console.error('[Settings] Erro ao salvar proxy no Table Storage:', err.message)
         );
@@ -95,7 +97,7 @@ function saveProxyConfig(config: ProxyConfig): void {
  * Inicializa proxy config: carrega do DB ou migra do disco
  */
 export async function initProxyFromDb(): Promise<void> {
-    if (!useDb) return;
+    if (!useDb()) return;
     try {
         const dbConfig = await dbGetProxyConfig();
         if (dbConfig) {
